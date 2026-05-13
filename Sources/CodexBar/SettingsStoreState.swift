@@ -19,6 +19,7 @@ struct SettingsDefaultsState {
     var quotaWarningMarkersVisible: Bool
     var usageBarsShowUsed: Bool
     var resetTimesShowAbsolute: Bool
+    var providerChangelogLinksEnabled: Bool
     var menuBarShowsBrandIconWithPercent: Bool
     var menuBarDisplayModeRaw: String?
     var historicalTrackingEnabled: Bool

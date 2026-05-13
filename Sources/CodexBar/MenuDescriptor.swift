@@ -424,7 +424,7 @@ struct MenuDescriptor {
         if metadata?.statusPageURL != nil || metadata?.statusLinkURL != nil {
             entries.append(.action("Status Page", .statusPage))
         }
-        if metadata?.changelogURL != nil {
+        if store.settings.providerChangelogLinksEnabled, metadata?.changelogURL != nil {
             entries.append(.action("Changelog", .changelog))
         }
 

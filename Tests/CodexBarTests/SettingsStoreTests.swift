@@ -138,6 +138,32 @@ struct SettingsStoreTests {
     }
 
     @Test
+    func `provider changelog links setting defaults off and persists`() throws {
+        let suite = "SettingsStoreTests-provider-changelog-links"
+        let defaultsA = try #require(UserDefaults(suiteName: suite))
+        defaultsA.removePersistentDomain(forName: suite)
+        let configStore = testConfigStore(suiteName: suite)
+        let storeA = SettingsStore(
+            userDefaults: defaultsA,
+            configStore: configStore,
+            zaiTokenStore: NoopZaiTokenStore(),
+            syntheticTokenStore: NoopSyntheticTokenStore())
+
+        #expect(storeA.providerChangelogLinksEnabled == false)
+        #expect(defaultsA.bool(forKey: "providerChangelogLinksEnabled") == false)
+        storeA.providerChangelogLinksEnabled = true
+
+        let defaultsB = try #require(UserDefaults(suiteName: suite))
+        let storeB = SettingsStore(
+            userDefaults: defaultsB,
+            configStore: configStore,
+            zaiTokenStore: NoopZaiTokenStore(),
+            syntheticTokenStore: NoopSyntheticTokenStore())
+
+        #expect(storeB.providerChangelogLinksEnabled == true)
+    }
+
+    @Test
     func `persists selected menu provider across instances`() throws {
         let suite = "SettingsStoreTests-selectedMenuProvider"
         let defaultsA = try #require(UserDefaults(suiteName: suite))

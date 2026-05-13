@@ -172,6 +172,14 @@ extension SettingsStore {
         }
     }
 
+    var providerChangelogLinksEnabled: Bool {
+        get { self.defaultsState.providerChangelogLinksEnabled }
+        set {
+            self.defaultsState.providerChangelogLinksEnabled = newValue
+            self.userDefaults.set(newValue, forKey: "providerChangelogLinksEnabled")
+        }
+    }
+
     var menuBarShowsBrandIconWithPercent: Bool {
         get { self.defaultsState.menuBarShowsBrandIconWithPercent }
         set {

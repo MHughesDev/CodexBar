@@ -19,6 +19,7 @@ extension SettingsStore {
         _ = self.quotaWarningMarkersVisible
         _ = self.usageBarsShowUsed
         _ = self.resetTimesShowAbsolute
+        _ = self.providerChangelogLinksEnabled
         _ = self.menuBarShowsBrandIconWithPercent
         _ = self.menuBarShowsHighestUsage
         _ = self.menuBarDisplayMode

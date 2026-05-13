@@ -466,6 +466,8 @@
 "show_quota_warning_markers_subtitle" = "Desenha marcas de limite nas barras de uso quando os alertas de cota estão configurados.";
 "show_reset_time_as_clock_title" = "Mostrar renovação como horário";
 "show_reset_time_as_clock_subtitle" = "Mostra horários de renovação como horas absolutas, em vez de contagens regressivas.";
+"show_provider_changelog_links_title" = "Mostrar links de changelog dos provedores";
+"show_provider_changelog_links_subtitle" = "Adiciona links de notas de versão para provedores baseados em CLI compatíveis no menu.";
 "show_credits_extra_usage_title" = "Mostrar créditos + uso extra";
 "show_credits_extra_usage_subtitle" = "Mostra as seções de créditos do Codex e uso extra do Claude no menu.";
 "show_all_token_accounts_title" = "Mostrar todas as contas de token";

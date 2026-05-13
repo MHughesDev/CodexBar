@@ -15,17 +15,33 @@ struct ProviderChangelogLinkTests {
     }
 
     @Test
-    func `provider menu shows changelog action only when URL is known`() {
-        let codexDescriptor = self.makeDescriptor(provider: .codex, suite: "ProviderChangelogLinkTests-codex")
+    func `provider menu hides changelog action until enabled`() {
+        let codexDescriptor = self.makeDescriptor(
+            provider: .codex,
+            suite: "ProviderChangelogLinkTests-codex-default")
+        #expect(!self.actionTitles(from: codexDescriptor).contains("Changelog"))
+    }
+
+    @Test
+    func `provider menu shows changelog action only when setting and URL are present`() {
+        let codexDescriptor = self.makeDescriptor(
+            provider: .codex,
+            suite: "ProviderChangelogLinkTests-codex",
+            changelogLinksEnabled: true)
         #expect(self.actionTitles(from: codexDescriptor).contains("Changelog"))
 
         let openRouterDescriptor = self.makeDescriptor(
             provider: .openrouter,
-            suite: "ProviderChangelogLinkTests-openrouter")
+            suite: "ProviderChangelogLinkTests-openrouter",
+            changelogLinksEnabled: true)
         #expect(!self.actionTitles(from: openRouterDescriptor).contains("Changelog"))
     }
 
-    private func makeDescriptor(provider: UsageProvider, suite: String) -> MenuDescriptor {
+    private func makeDescriptor(
+        provider: UsageProvider,
+        suite: String,
+        changelogLinksEnabled: Bool = false) -> MenuDescriptor
+    {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let settings = SettingsStore(
@@ -34,6 +50,7 @@ struct ProviderChangelogLinkTests {
             zaiTokenStore: NoopZaiTokenStore(),
             syntheticTokenStore: NoopSyntheticTokenStore())
         settings.statusChecksEnabled = false
+        settings.providerChangelogLinksEnabled = changelogLinksEnabled
 
         let fetcher = UsageFetcher(environment: [:])
         let store = UsageStore(

@@ -83,6 +83,10 @@ struct DisplayPane: View {
                         subtitle: L("show_reset_time_as_clock_subtitle"),
                         binding: self.$settings.resetTimesShowAbsolute)
                     PreferenceToggleRow(
+                        title: L("show_provider_changelog_links_title"),
+                        subtitle: L("show_provider_changelog_links_subtitle"),
+                        binding: self.$settings.providerChangelogLinksEnabled)
+                    PreferenceToggleRow(
                         title: L("show_credits_extra_usage_title"),
                         subtitle: L("show_credits_extra_usage_subtitle"),
                         binding: self.$settings.showOptionalCreditsAndExtraUsage)
