@@ -19,7 +19,7 @@
 - Codex: coalesce historical pace reset timestamps into 5-minute buckets so dashboard and live reset jitter do not duplicate weekly history windows (#901). Thanks @zhulijin1991!
 - Settings: let stale managed Codex account records be removed even when their stored home path is outside CodexBar's managed-home directory, and keep CLI known-owner tests from writing fixtures into the live app store.
 - Settings: apply the selected app language from packaged SwiftPM resources instead of falling back to English when the `.lproj` directory casing differs (#908).
-- Claude: handle Enterprise/organization web accounts whose session quota window is null and expose an optional Org ID field for Claude token accounts (#941, fixes #940). Thanks @clintandrewhall!
+- Claude: handle Enterprise/organization web accounts whose session quota window is null, parse inline spend-limit usage, and expose an optional Org ID field for Claude token accounts (#941, fixes #940). Thanks @clintandrewhall!
 - Codex: route menu account refreshes through the resolved live-vs-managed account source so matched accounts keep using the stable `CODEX_HOME` (#932, fixes #931). Thanks @ThiagoCAltoe!
 - ChatGPT credits: restrict purchase links to real HTTPS `chatgpt.com` settings/usage/billing/credits paths and drop query/fragment data (#903). Thanks @ThiagoCAltoe!
 - z.ai: show the MCP quota bucket as monthly instead of a misleading 1-minute window (#904). Thanks @ThiagoCAltoe!

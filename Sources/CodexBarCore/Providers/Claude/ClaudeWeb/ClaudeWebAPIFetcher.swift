@@ -517,6 +517,7 @@ public enum ClaudeWebAPIFetcher {
         if let sourceKey = extraRateParse.sourceKeys["claude-routines"] {
             logger?("Usage API extra window key matched: routines=\(sourceKey)")
         }
+        let extraUsageCost = Self.parseExtraUsageCost(from: json["extra_usage"])
 
         return WebUsageData(
             sessionPercentUsed: resolvedSessionPercent,
@@ -525,7 +526,7 @@ public enum ClaudeWebAPIFetcher {
             weeklyResetsAt: weeklyResets,
             opusPercentUsed: opusPercent,
             extraRateWindows: extraRateParse.windows,
-            extraUsageCost: nil,
+            extraUsageCost: extraUsageCost,
             accountOrganization: nil,
             accountEmail: nil,
             loginMethod: nil)
@@ -542,6 +543,19 @@ public enum ClaudeWebAPIFetcher {
     }
 
     // MARK: - Extra usage cost (Claude "Extra")
+
+    private static func parseExtraUsageCost(from value: Any?) -> ProviderCostSnapshot? {
+        guard let extraUsage = value as? [String: Any] else { return nil }
+        guard let used = Self.doubleValue(extraUsage["used_credits"]),
+              let limit = Self.doubleValue(extraUsage["monthly_limit"] ?? extraUsage["monthly_credit_limit"]),
+              limit > 0 else { return nil }
+        let currency = (extraUsage["currency"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currencyCode = currency?.isEmpty == false ? currency ?? "USD" : "USD"
+        return Self.makeExtraUsageCost(
+            usedCredits: used,
+            monthlyCreditLimit: limit,
+            currencyCode: currencyCode)
+    }
 
     private struct OverageSpendLimitResponse: Decodable {
         let monthlyCreditLimit: Double?
@@ -589,16 +603,40 @@ public enum ClaudeWebAPIFetcher {
               let currency = decoded.currency,
               !currency.isEmpty else { return nil }
 
-        let usedAmount = used / 100.0
-        let limitAmount = limit / 100.0
+        return Self.makeExtraUsageCost(
+            usedCredits: used,
+            monthlyCreditLimit: limit,
+            currencyCode: currency)
+    }
+
+    private static func makeExtraUsageCost(
+        usedCredits: Double,
+        monthlyCreditLimit: Double,
+        currencyCode: String) -> ProviderCostSnapshot
+    {
+        let usedAmount = usedCredits / 100.0
+        let limitAmount = monthlyCreditLimit / 100.0
 
         return ProviderCostSnapshot(
             used: usedAmount,
             limit: limitAmount,
-            currencyCode: currency,
+            currencyCode: currencyCode,
             period: "Monthly",
             resetsAt: nil,
             updatedAt: Date())
+    }
+
+    private static func doubleValue(_ value: Any?) -> Double? {
+        switch value {
+        case let int as Int:
+            Double(int)
+        case let double as Double:
+            double
+        case let string as String:
+            Double(string)
+        default:
+            nil
+        }
     }
 
     #if DEBUG
