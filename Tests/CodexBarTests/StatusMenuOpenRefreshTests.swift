@@ -169,7 +169,7 @@ extension StatusMenuTests {
     }
 
     @Test
-    func `closed attached menu is prepared before next open after invalidation`() async {
+    func `closed merged menu defers rebuild until next open instead of pre-warming`() async {
         self.disableMenuCardsForTesting()
         let settings = self.makeSettings()
         settings.statusChecksEnabled = false
@@ -199,13 +199,29 @@ extension StatusMenuTests {
         let key = ObjectIdentifier(menu)
         let openedVersion = controller.menuVersions[key]
 
-        controller.invalidateMenus()
-        for _ in 0..<40 where controller.menuVersions[key] == openedVersion {
+        // Background data-refresh tick (stale allowed): the closed merged menu must not be pre-warmed.
+        controller.invalidateMenus(allowStaleContentDuringDataRefresh: true)
+        for _ in 0..<40 {
             await Task.yield()
         }
-
         #expect(controller.openMenus.isEmpty)
+        #expect(controller.menuContentVersion != openedVersion)
+        #expect(controller.menuVersions[key] == openedVersion)
+        #expect(controller.closedMenusDeferredUntilNextOpen.contains(key))
+
+        // A required (non-stale) invalidation must also leave the closed merged menu deferred.
+        controller.invalidateMenus()
+        for _ in 0..<40 {
+            await Task.yield()
+        }
+        #expect(controller.menuVersions[key] == openedVersion)
+        #expect(controller.closedMenusDeferredUntilNextOpen.contains(key))
+
+        // The deferred merged menu is repopulated synchronously on the next open.
+        controller.menuWillOpen(menu)
+        defer { controller.menuDidClose(menu) }
         #expect(controller.menuVersions[key] == controller.menuContentVersion)
+        #expect(!controller.closedMenusDeferredUntilNextOpen.contains(key))
     }
 
     @Test
@@ -231,7 +247,9 @@ extension StatusMenuTests {
 
         controller.menuRefreshEnabledOverrideForTesting = true
         let menu = controller.makeMenu()
-        controller.mergedMenu = menu
+        // Use a non-merged attached menu: the merged menu is intentionally never pre-warmed while
+        // closed (#1274), so the in-flight-refresh prep machinery is exercised via the fallback menu.
+        controller.fallbackMenu = menu
         controller.statusItem.menu = menu
 
         controller.populateMenu(menu, provider: nil)
@@ -281,7 +299,9 @@ extension StatusMenuTests {
 
         controller.menuRefreshEnabledOverrideForTesting = true
         let menu = controller.makeMenu()
-        controller.mergedMenu = menu
+        // Use a non-merged attached menu: the merged menu is intentionally never pre-warmed while
+        // closed (#1274), so the in-flight-refresh prep machinery is exercised via the fallback menu.
+        controller.fallbackMenu = menu
         controller.statusItem.menu = menu
 
         controller.populateMenu(menu, provider: nil)

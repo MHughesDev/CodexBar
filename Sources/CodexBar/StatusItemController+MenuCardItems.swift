@@ -25,6 +25,7 @@ extension StatusItemController {
         id: String,
         width: CGFloat,
         heightCacheScope: String? = nil,
+        heightCacheFingerprint: String? = nil,
         submenu: NSMenu? = nil,
         submenuIndicatorAlignment: Alignment = .topTrailing,
         submenuIndicatorTopPadding: CGFloat = 8,
@@ -52,7 +53,12 @@ extension StatusItemController {
             view
         }
         let hosting = MenuCardItemHostingView(rootView: wrapped, highlightState: highlightState, onClick: onClick)
-        let height = self.cachedMenuCardHeight(for: id, scope: heightCacheScope ?? id, width: width) {
+        let height = self.cachedMenuCardHeight(
+            for: id,
+            scope: heightCacheScope ?? id,
+            width: width,
+            fingerprint: heightCacheFingerprint)
+        {
             self.menuCardHeight(for: hosting, width: width)
         }
         hosting.frame = NSRect(origin: .zero, size: NSSize(width: width, height: height))

@@ -550,6 +550,9 @@ extension StatusItemController {
                 id: identifier,
                 width: menuWidth,
                 heightCacheScope: row.provider.rawValue,
+                heightCacheFingerprint: row.model.heightFingerprint(
+                    section: "overview",
+                    additional: [UsageMenuCardView.Model.heightFingerprintField("storage", storageText)]),
                 submenu: submenu,
                 onClick: { [weak self, weak menu] in
                     guard let self, let menu else { return }
@@ -633,7 +636,8 @@ extension StatusItemController {
             UsageMenuCardView(model: model, width: context.menuWidth),
             id: "menuCard",
             width: context.menuWidth,
-            heightCacheScope: context.currentProvider.rawValue))
+            heightCacheScope: context.currentProvider.rawValue,
+            heightCacheFingerprint: model.heightFingerprint(section: "card")))
         if self.addStorageMenuCardSection(to: menu, provider: context.currentProvider, width: context.menuWidth) {
             menu.addItem(.separator())
         }
@@ -654,7 +658,8 @@ extension StatusItemController {
                 UsageMenuCardView(model: model, width: context.menuWidth),
                 id: "menuCard",
                 width: context.menuWidth,
-                heightCacheScope: context.currentProvider.rawValue))
+                heightCacheScope: context.currentProvider.rawValue,
+                heightCacheFingerprint: model.heightFingerprint(section: "card")))
             menu.addItem(.separator())
         } else {
             for (index, model) in cards.enumerated() {
@@ -662,7 +667,8 @@ extension StatusItemController {
                     UsageMenuCardView(model: model, width: context.menuWidth),
                     id: "menuCard-\(index)",
                     width: context.menuWidth,
-                    heightCacheScope: "\(context.currentProvider.rawValue)-\(index)"))
+                    heightCacheScope: "\(context.currentProvider.rawValue)-\(index)",
+                    heightCacheFingerprint: model.heightFingerprint(section: "card")))
                 if index < cards.count - 1 {
                     menu.addItem(.separator())
                 }
@@ -1197,6 +1203,7 @@ extension StatusItemController {
                 id: "menuCardUsage",
                 width: width,
                 heightCacheScope: provider.rawValue,
+                heightCacheFingerprint: model.heightFingerprint(section: "usage"),
                 submenu: usageSubmenu))
         } else {
             let headerView = UsageMenuCardHeaderSectionView(
@@ -1207,7 +1214,8 @@ extension StatusItemController {
                 headerView,
                 id: "menuCardHeader",
                 width: width,
-                heightCacheScope: provider.rawValue))
+                heightCacheScope: provider.rawValue,
+                heightCacheFingerprint: model.heightFingerprint(section: "header")))
         }
 
         if hasStorage || hasCredits || hasExtraUsage || hasCost {
@@ -1236,6 +1244,7 @@ extension StatusItemController {
                 id: "menuCardCredits",
                 width: width,
                 heightCacheScope: provider.rawValue,
+                heightCacheFingerprint: model.heightFingerprint(section: "credits"),
                 submenu: creditsSubmenu))
             if webItems.canShowBuyCredits {
                 menu.addItem(self.makeBuyCreditsItem())
@@ -1256,6 +1265,7 @@ extension StatusItemController {
                 id: "menuCardExtraUsage",
                 width: width,
                 heightCacheScope: provider.rawValue,
+                heightCacheFingerprint: model.heightFingerprint(section: "extraUsage"),
                 submenu: extraUsageSubmenu))
         }
         if hasCost {
@@ -1282,6 +1292,7 @@ extension StatusItemController {
             id: "menuCardStorage",
             width: width,
             heightCacheScope: provider.rawValue,
+            heightCacheFingerprint: UsageMenuCardView.Model.heightFingerprintField("storage", storageText),
             submenu: storageSubmenu))
         return true
     }

@@ -25,6 +25,7 @@ extension StatusItemController {
             id: "usageHistorySubmenu",
             width: width,
             heightCacheScope: provider.rawValue,
+            heightCacheFingerprint: "usageHistorySubmenu:\(provider.rawValue)",
             submenu: submenu,
             submenuIndicatorAlignment: .trailing,
             submenuIndicatorTopPadding: 0)

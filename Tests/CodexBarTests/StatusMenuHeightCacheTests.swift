@@ -5,7 +5,7 @@ import Testing
 
 extension StatusMenuTests {
     @Test
-    func `menu card height cache is reused within one content version`() {
+    func `menu card height cache is reused for stable card content`() {
         let previousMenuCardRendering = StatusItemController.menuCardRenderingEnabled
         StatusItemController.menuCardRenderingEnabled = true
         defer {
@@ -26,7 +26,7 @@ extension StatusMenuTests {
         let controller = StatusItemController(
             store: store,
             settings: settings,
-            account: UsageFetcher().loadAccountInfo(),
+            account: AccountInfo(email: nil, plan: nil),
             updater: DisabledUpdaterController(),
             preferencesSelection: PreferencesSelection(),
             statusBar: self.makeStatusBarForTesting())
@@ -42,7 +42,128 @@ extension StatusMenuTests {
         #expect(Set(controller.menuCardHeightCache.keys) == firstKeys)
 
         controller.invalidateMenus()
-        #expect(controller.menuCardHeightCache.isEmpty)
+        #expect(Set(controller.menuCardHeightCache.keys) == firstKeys)
+    }
+
+    @Test
+    func `fingerprinted menu card height cache survives content version invalidation`() {
+        let controller = self.makeHeightCacheController()
+        defer { controller.releaseStatusItemsForTesting() }
+
+        var measureCount = 0
+        let first = controller.cachedMenuCardHeight(
+            for: "menuCard",
+            scope: UsageProvider.codex.rawValue,
+            width: 320,
+            fingerprint: "content:stable")
+        {
+            measureCount += 1
+            return 42
+        }
+
+        controller.invalidateMenus()
+
+        let second = controller.cachedMenuCardHeight(
+            for: "menuCard",
+            scope: UsageProvider.codex.rawValue,
+            width: 320,
+            fingerprint: "content:stable")
+        {
+            measureCount += 1
+            return 99
+        }
+
+        #expect(first == 42)
+        #expect(second == 42)
+        #expect(measureCount == 1)
+    }
+
+    @Test
+    func `fingerprinted menu card height cache remeasures when content changes`() {
+        let controller = self.makeHeightCacheController()
+        defer { controller.releaseStatusItemsForTesting() }
+
+        var measureCount = 0
+        let first = controller.cachedMenuCardHeight(
+            for: "menuCard",
+            scope: UsageProvider.codex.rawValue,
+            width: 320,
+            fingerprint: "content:a")
+        {
+            measureCount += 1
+            return 42
+        }
+        let second = controller.cachedMenuCardHeight(
+            for: "menuCard",
+            scope: UsageProvider.codex.rawValue,
+            width: 320,
+            fingerprint: "content:b")
+        {
+            measureCount += 1
+            return 99
+        }
+
+        #expect(first == 42)
+        #expect(second == 99)
+        #expect(measureCount == 2)
+    }
+
+    @Test
+    func `unfingerprinted menu card height cache remains content version scoped`() {
+        let controller = self.makeHeightCacheController()
+        defer { controller.releaseStatusItemsForTesting() }
+
+        var measureCount = 0
+        let first = controller.cachedMenuCardHeight(
+            for: "menuCard",
+            scope: UsageProvider.codex.rawValue,
+            width: 320)
+        {
+            measureCount += 1
+            return 42
+        }
+
+        controller.invalidateMenus()
+
+        let second = controller.cachedMenuCardHeight(
+            for: "menuCard",
+            scope: UsageProvider.codex.rawValue,
+            width: 320)
+        {
+            measureCount += 1
+            return 99
+        }
+
+        #expect(first == 42)
+        #expect(second == 99)
+        #expect(measureCount == 2)
+    }
+
+    @Test
+    func `menu invalidation prunes old version scoped height cache entries`() {
+        let controller = self.makeHeightCacheController()
+        defer { controller.releaseStatusItemsForTesting() }
+
+        _ = controller.cachedMenuCardHeight(
+            for: "versioned",
+            scope: UsageProvider.codex.rawValue,
+            width: 320)
+        {
+            42
+        }
+        _ = controller.cachedMenuCardHeight(
+            for: "fingerprinted",
+            scope: UsageProvider.codex.rawValue,
+            width: 320,
+            fingerprint: "content:stable")
+        {
+            99
+        }
+
+        controller.invalidateMenus()
+
+        #expect(controller.menuCardHeightCache.keys.allSatisfy { !$0.fingerprint.hasPrefix("version:") })
+        #expect(controller.menuCardHeightCache.keys.contains { $0.fingerprint == "content:stable" })
     }
 
     @Test
@@ -66,7 +187,6 @@ extension StatusMenuTests {
                 enabled: provider == .codex || provider == .claude)
         }
 
-        let fetcher = UsageFetcher()
         let store = self.makeCodexStore(settings: settings, dashboardAuthorized: false)
         store._setSnapshotForTesting(
             UsageSnapshot(
@@ -87,7 +207,7 @@ extension StatusMenuTests {
         let controller = StatusItemController(
             store: store,
             settings: settings,
-            account: fetcher.loadAccountInfo(),
+            account: AccountInfo(email: nil, plan: nil),
             updater: DisabledUpdaterController(),
             preferencesSelection: PreferencesSelection(),
             statusBar: self.makeStatusBarForTesting())
@@ -100,5 +220,20 @@ extension StatusMenuTests {
         let scopes = Set(controller.menuCardHeightCache.keys.map(\.scope))
         #expect(scopes.contains(UsageProvider.codex.rawValue))
         #expect(scopes.contains(UsageProvider.claude.rawValue))
+    }
+
+    private func makeHeightCacheController() -> StatusItemController {
+        let settings = self.makeSettings()
+        settings.statusChecksEnabled = false
+        settings.refreshFrequency = .manual
+        settings.mergeIcons = false
+        let store = self.makeCodexStore(settings: settings, dashboardAuthorized: false)
+        return StatusItemController(
+            store: store,
+            settings: settings,
+            account: AccountInfo(email: nil, plan: nil),
+            updater: DisabledUpdaterController(),
+            preferencesSelection: PreferencesSelection(),
+            statusBar: self.makeStatusBarForTesting())
     }
 }

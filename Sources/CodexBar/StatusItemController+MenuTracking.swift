@@ -32,7 +32,7 @@ extension StatusItemController {
         guard !self.isReleasedForTesting else { return }
         #endif
         self.menuContentVersion &+= 1
-        self.menuCardHeightCache.removeAll(keepingCapacity: true)
+        self.pruneVersionScopedMenuCardHeightCache()
         if !allowStaleContentDuringDataRefresh {
             self.latestRequiredMenuRebuildVersion = self.menuContentVersion
         }
@@ -53,7 +53,16 @@ extension StatusItemController {
         guard self.openMenus.isEmpty else { return }
         guard !self.isMenuDataRefreshInFlight else { return }
         for menu in self.attachedMenusForClosedPreparation() {
-            guard !self.closedMenusDeferredUntilNextOpen.contains(ObjectIdentifier(menu)) else { continue }
+            let key = ObjectIdentifier(menu)
+            guard !self.closedMenusDeferredUntilNextOpen.contains(key) else { continue }
+            // Pre-warming the merged menu while it is closed runs a full main-thread populateMenu
+            // (incl. SwiftUI hosting-view layout) that menuWillOpen redoes synchronously on display
+            // anyway. In Merge Icons mode it is the only attached menu, so this just relocates that
+            // work into a background freeze on every store tick (#1274). Defer it until next open.
+            if menu === self.mergedMenu {
+                self.closedMenusDeferredUntilNextOpen.insert(key)
+                continue
+            }
             self.rebuildClosedMenuIfNeeded(menu)
         }
     }

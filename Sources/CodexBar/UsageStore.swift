@@ -111,6 +111,16 @@ final class UsageStore {
         }
     }
 
+    struct AccountInfoCacheEntry {
+        let account: AccountInfo
+        let configRevision: Int
+        let expiresAt: Date
+
+        func isValid(now: Date, configRevision: Int) -> Bool {
+            self.configRevision == configRevision && self.expiresAt > now
+        }
+    }
+
     enum CodexCreditsSource {
         case none
         case api
@@ -214,6 +224,7 @@ final class UsageStore {
     @ObservationIgnored let providerMetadata: [UsageProvider: ProviderMetadata]
     @ObservationIgnored var providerRuntimes: [UsageProvider: any ProviderRuntime] = [:]
     @ObservationIgnored private var providerAvailabilityCache: [UsageProvider: ProviderAvailabilityCacheEntry] = [:]
+    @ObservationIgnored var accountInfoCache: [UsageProvider: AccountInfoCacheEntry] = [:]
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private var tokenTimerTask: Task<Void, Never>?
     @ObservationIgnored private var tokenRefreshSequenceTask: Task<Void, Never>?
@@ -245,6 +256,7 @@ final class UsageStore {
     @ObservationIgnored var weeklyLimitResetDetectorStates: [String: WeeklyLimitResetDetectorState] = [:]
     @ObservationIgnored private var hasCompletedInitialRefresh: Bool = false
     @ObservationIgnored private let providerAvailabilityCacheTTL: TimeInterval = 1
+    @ObservationIgnored let accountInfoCacheTTL: TimeInterval = 30
     @ObservationIgnored private let tokenFetchTTL: TimeInterval = 60 * 60
     @ObservationIgnored private let tokenFetchTimeout: TimeInterval = 10 * 60
     @ObservationIgnored let startupBehavior: StartupBehavior
