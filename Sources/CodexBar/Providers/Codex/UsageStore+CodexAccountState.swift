@@ -13,6 +13,19 @@ struct CodexAccountScopedRefreshGuard: Equatable {
     let source: CodexActiveSource
     let identity: CodexIdentity
     let accountKey: String?
+    let authFingerprint: String?
+
+    init(
+        source: CodexActiveSource,
+        identity: CodexIdentity,
+        accountKey: String?,
+        authFingerprint: String? = nil)
+    {
+        self.source = source
+        self.identity = identity
+        self.accountKey = accountKey
+        self.authFingerprint = CodexAuthFingerprint.normalize(authFingerprint)
+    }
 }
 
 @MainActor
@@ -106,7 +119,8 @@ extension UsageStore {
         self.lastCodexAccountScopedRefreshGuard = CodexAccountScopedRefreshGuard(
             source: resolvedSource,
             identity: resolvedIdentity,
-            accountKey: accountKey)
+            accountKey: accountKey,
+            authFingerprint: self.currentCodexAuthFingerprint(source: resolvedSource))
     }
 
     func currentCodexAccountScopedRefreshGuard(
@@ -121,7 +135,8 @@ extension UsageStore {
                 allowLastKnownLiveFallback: allowLastKnownLiveFallback),
             accountKey: self.codexAccountScopedRefreshKey(
                 preferCurrentSnapshot: preferCurrentSnapshot,
-                allowLastKnownLiveFallback: allowLastKnownLiveFallback))
+                allowLastKnownLiveFallback: allowLastKnownLiveFallback),
+            authFingerprint: self.currentCodexAuthFingerprint(source: self.settings.codexResolvedActiveSource))
     }
 
     func currentCodexOpenAIWebRefreshGuard() -> CodexAccountScopedRefreshGuard {
@@ -137,7 +152,8 @@ extension UsageStore {
         return CodexAccountScopedRefreshGuard(
             source: source,
             identity: self.currentCodexOpenAIWebIdentity(source: source),
-            accountKey: accountKey)
+            accountKey: accountKey,
+            authFingerprint: self.currentCodexAuthFingerprint(source: source))
     }
 
     func shouldApplyCodexUsageResult(
@@ -146,6 +162,7 @@ extension UsageStore {
     {
         let currentGuard = self.currentCodexAccountScopedRefreshGuard()
         guard currentGuard.source == expectedGuard.source else { return false }
+        guard Self.codexGuardAuthFingerprintMatches(currentGuard, expectedGuard) else { return false }
 
         if expectedGuard.identity != .unresolved {
             return currentGuard.identity == expectedGuard.identity
@@ -167,6 +184,7 @@ extension UsageStore {
     func shouldApplyCodexScopedFailure(expectedGuard: CodexAccountScopedRefreshGuard) -> Bool {
         let currentGuard = self.currentCodexAccountScopedRefreshGuard()
         guard currentGuard.source == expectedGuard.source else { return false }
+        guard Self.codexGuardAuthFingerprintMatches(currentGuard, expectedGuard) else { return false }
 
         if expectedGuard.identity != .unresolved {
             return currentGuard.identity == expectedGuard.identity
@@ -178,6 +196,7 @@ extension UsageStore {
     func shouldApplyCodexScopedNonUsageResult(expectedGuard: CodexAccountScopedRefreshGuard) -> Bool {
         let currentGuard = self.currentCodexAccountScopedRefreshGuard()
         guard currentGuard.source == expectedGuard.source else { return false }
+        guard Self.codexGuardAuthFingerprintMatches(currentGuard, expectedGuard) else { return false }
         guard expectedGuard.identity != .unresolved else { return false }
         return currentGuard.identity == expectedGuard.identity
     }
@@ -189,6 +208,7 @@ extension UsageStore {
         let normalizedRoutingTargetEmail = CodexIdentityResolver.normalizeEmail(routingTargetEmail)
         let currentGuard = self.currentCodexOpenAIWebRefreshGuard()
         guard currentGuard.source == expectedGuard.source else { return false }
+        guard Self.codexGuardAuthFingerprintMatches(currentGuard, expectedGuard) else { return false }
 
         if expectedGuard.identity != .unresolved {
             return currentGuard.identity == expectedGuard.identity
@@ -275,6 +295,28 @@ extension UsageStore {
         guard case .liveSystem = self.settings.codexResolvedActiveSource else { return }
         guard let normalized = Self.normalizeCodexAccountScopedEmail(email) else { return }
         self.lastKnownLiveSystemCodexEmail = normalized
+    }
+
+    static func codexGuardAuthFingerprintMatches(
+        _ lhs: CodexAccountScopedRefreshGuard,
+        _ rhs: CodexAccountScopedRefreshGuard) -> Bool
+    {
+        let lhsFingerprint = CodexAuthFingerprint.normalize(lhs.authFingerprint)
+        let rhsFingerprint = CodexAuthFingerprint.normalize(rhs.authFingerprint)
+        if lhsFingerprint != nil || rhsFingerprint != nil {
+            return lhsFingerprint == rhsFingerprint
+        }
+        return true
+    }
+
+    func currentCodexAuthFingerprint(source: CodexActiveSource) -> String? {
+        let snapshot = self.settings.codexAccountReconciliationSnapshot
+        switch source {
+        case .liveSystem:
+            return CodexAuthFingerprint.normalize(snapshot.liveSystemAccount?.authFingerprint)
+        case let .managedAccount(id):
+            return CodexAuthFingerprint.normalize(snapshot.storedAccounts.first { $0.id == id }?.authFingerprint)
+        }
     }
 
     func codexAccountScopedRefreshKey(

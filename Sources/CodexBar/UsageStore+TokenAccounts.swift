@@ -83,6 +83,7 @@ extension UsageStore {
         let priorByAccountID = Dictionary(uniqueKeysWithValues: self.codexAccountSnapshots.map { ($0.id, $0) })
         var snapshots: [CodexAccountUsageSnapshot] = []
         var selectedOutcome: ProviderFetchOutcome?
+        var selectedAccount: CodexVisibleAccount?
         var selectedSnapshot: UsageSnapshot?
         var selectedSourceLabel: String?
         var sawAnyNonCancellationOutcome = false
@@ -108,6 +109,7 @@ extension UsageStore {
             }
             if account.id == originalVisibleAccountID {
                 selectedOutcome = outcome
+                selectedAccount = account
                 selectedSnapshot = resolved.usage
                 selectedSourceLabel = resolved.sourceLabel
             }
@@ -123,9 +125,10 @@ extension UsageStore {
         let selectionStillMatches = self.codexVisibleSelectionStillMatches(
             originalVisibleAccountID: originalVisibleAccountID,
             originalSelectionSource: originalSelectionSource)
-        if let selectedOutcome, selectionStillMatches {
+        if let selectedOutcome, let selectedAccount, selectionStillMatches {
             await self.applySelectedCodexVisibleAccountOutcome(
                 selectedOutcome,
+                account: selectedAccount,
                 snapshot: selectedSnapshot,
                 sourceLabel: selectedSourceLabel)
         }
@@ -473,10 +476,20 @@ extension UsageStore {
         {
             snapshots.append(lastKnown)
         }
-        if let history = self.codexPlanHistoryResetBackfillSnapshot(for: account) {
+        if self.codexCanUseHistoricalResetBackfill(for: account),
+           let history = self.codexPlanHistoryResetBackfillSnapshot(for: account)
+        {
             snapshots.append(history)
         }
         return snapshots
+    }
+
+    private func codexCanUseHistoricalResetBackfill(for account: CodexVisibleAccount) -> Bool {
+        let authFingerprint = CodexAuthFingerprint.normalize(account.authFingerprint)
+        let workspaceAccountID = Self.normalizedCodexVisibleAccountText(account.workspaceAccountID)
+            .map(CodexOpenAIWorkspaceIdentity.normalizeWorkspaceAccountID)
+        guard authFingerprint != nil, workspaceAccountID == nil else { return true }
+        return Self.codexScopedGuard(self.lastCodexAccountScopedRefreshGuard, matches: account)
     }
 
     private func codexPlanHistoryResetBackfillSnapshot(for account: CodexVisibleAccount) -> UsageSnapshot? {
@@ -520,6 +533,15 @@ extension UsageStore {
             return nil
         }
         return snapshot
+    }
+
+    func codexLastKnownResetSnapshot(matching guardValue: CodexAccountScopedRefreshGuard?) -> UsageSnapshot? {
+        guard let guardValue,
+              self.lastCodexAccountScopedRefreshGuard == guardValue
+        else {
+            return nil
+        }
+        return self.lastKnownResetSnapshots[.codex]
     }
 
     private nonisolated static func codexVisibleAccountEmailMatches(
@@ -579,12 +601,28 @@ extension UsageStore {
         matches account: CodexVisibleAccount) -> Bool
     {
         guard let guardValue, guardValue.source == account.selectionSource else { return false }
+        let guardAuthFingerprint = CodexAuthFingerprint.normalize(guardValue.authFingerprint)
+        let accountAuthFingerprint = CodexAuthFingerprint.normalize(account.authFingerprint)
+        if guardAuthFingerprint != nil || accountAuthFingerprint != nil {
+            guard guardAuthFingerprint == accountAuthFingerprint else { return false }
+        }
         let identity = self.codexVisibleAccountIdentity(for: account)
         if identity != .unresolved {
             return guardValue.identity == identity
         }
         guard let accountKey = CodexIdentityResolver.normalizeEmail(account.email) else { return false }
         return guardValue.accountKey == accountKey
+    }
+
+    private nonisolated static func codexScopedRefreshGuard(for account: CodexVisibleAccount)
+        -> CodexAccountScopedRefreshGuard
+    {
+        let accountEmail = CodexIdentityResolver.normalizeEmail(account.email)
+        return CodexAccountScopedRefreshGuard(
+            source: account.selectionSource,
+            identity: self.codexVisibleAccountIdentity(for: account),
+            accountKey: accountEmail,
+            authFingerprint: account.authFingerprint)
     }
 
     private nonisolated static func codexVisibleAccountIdentity(for account: CodexVisibleAccount) -> CodexIdentity {
@@ -853,6 +891,7 @@ extension UsageStore {
 
     func applySelectedCodexVisibleAccountOutcome(
         _ outcome: ProviderFetchOutcome,
+        account: CodexVisibleAccount,
         snapshot: UsageSnapshot?,
         sourceLabel: String?) async
     {
@@ -862,6 +901,7 @@ extension UsageStore {
             guard let snapshot else { return }
             self.handleSessionQuotaTransition(provider: .codex, snapshot: snapshot)
             self.lastKnownResetSnapshots[.codex] = snapshot
+            self.lastCodexAccountScopedRefreshGuard = Self.codexScopedRefreshGuard(for: account)
             self.snapshots[.codex] = snapshot
             if let sourceLabel {
                 self.lastSourceLabels[.codex] = sourceLabel
