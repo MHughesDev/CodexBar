@@ -122,7 +122,8 @@ extension UsageStore {
         let currentSnapshots = snapshots.compactMap { snapshot -> CodexAccountUsageSnapshot? in
             guard let currentAccount = Self.currentCodexVisibleAccount(
                 matching: snapshot.account,
-                projection: currentProjection)
+                projection: currentProjection,
+                allowProviderAccountAuthFingerprintMismatch: snapshot.error == nil)
             else {
                 return nil
             }
@@ -153,9 +154,16 @@ extension UsageStore {
             return
         }
 
+        let allowSelectedAuthFingerprintMismatch = switch selectedOutcome.result {
+        case .success:
+            true
+        case .failure:
+            false
+        }
         let currentSelectedAccount = Self.currentCodexVisibleAccount(
             matching: selectedAccount,
-            projection: currentProjection)
+            projection: currentProjection,
+            allowProviderAccountAuthFingerprintMismatch: allowSelectedAuthFingerprintMismatch)
         if let currentSelectedAccount {
             let currentSelectedSnapshot = Self.codexVisibleAccountSnapshotRelabeledForCurrentProjection(
                 selectedSnapshot,
@@ -206,15 +214,22 @@ extension UsageStore {
 
     private static func currentCodexVisibleAccount(
         matching account: CodexVisibleAccount,
-        projection: CodexVisibleAccountProjection) -> CodexVisibleAccount?
+        projection: CodexVisibleAccountProjection,
+        allowProviderAccountAuthFingerprintMismatch: Bool = true) -> CodexVisibleAccount?
     {
         if let currentAccount = projection.visibleAccounts.first(where: { $0.id == account.id }),
-           self.codexVisibleAccountMatchesCurrentProjection(account, account: currentAccount)
+           self.codexVisibleAccountMatchesCurrentProjection(
+               account,
+               account: currentAccount,
+               allowProviderAccountAuthFingerprintMismatch: allowProviderAccountAuthFingerprintMismatch)
         {
             return currentAccount
         }
         return projection.visibleAccounts.first {
-            self.codexVisibleAccountMatchesCurrentProjection(account, account: $0)
+            self.codexVisibleAccountMatchesCurrentProjection(
+                account,
+                account: $0,
+                allowProviderAccountAuthFingerprintMismatch: allowProviderAccountAuthFingerprintMismatch)
         }
     }
 
@@ -233,7 +248,8 @@ extension UsageStore {
 
     private static func codexVisibleAccountMatchesCurrentProjection(
         _ prior: CodexVisibleAccount,
-        account: CodexVisibleAccount) -> Bool
+        account: CodexVisibleAccount,
+        allowProviderAccountAuthFingerprintMismatch: Bool = true) -> Bool
     {
         guard prior.selectionSource == account.selectionSource else { return false }
 
@@ -246,6 +262,9 @@ extension UsageStore {
             .map(CodexOpenAIWorkspaceIdentity.normalizeWorkspaceAccountID)
         if priorWorkspaceID != nil || accountWorkspaceID != nil {
             guard priorWorkspaceID == accountWorkspaceID else { return false }
+            if !allowProviderAccountAuthFingerprintMismatch {
+                guard self.codexVisibleAccountAuthFingerprintMatches(prior, account: account) else { return false }
+            }
             switch account.selectionSource {
             case .managedAccount:
                 return true
@@ -261,6 +280,18 @@ extension UsageStore {
         }
 
         return priorEmail != nil && priorEmail == accountEmail
+    }
+
+    private static func codexVisibleAccountAuthFingerprintMatches(
+        _ prior: CodexVisibleAccount,
+        account: CodexVisibleAccount) -> Bool
+    {
+        let priorAuthFingerprint = CodexAuthFingerprint.normalize(prior.authFingerprint)
+        let accountAuthFingerprint = CodexAuthFingerprint.normalize(account.authFingerprint)
+        if priorAuthFingerprint != nil || accountAuthFingerprint != nil {
+            return priorAuthFingerprint == accountAuthFingerprint
+        }
+        return true
     }
 
     func shouldApplySelectedCodexVisibleAccountOutcome(
