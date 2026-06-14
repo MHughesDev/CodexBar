@@ -362,10 +362,22 @@ public enum BinaryLocator {
         fileManager: FileManager,
         launchCandidateFilter: (String, FileManager) -> Bool = { _, _ in true }) -> String?
     {
+        #if os(Windows)
+        let pathext = (ProcessInfo.processInfo.environment["PATHEXT"] ?? ".EXE;.CMD;.BAT;.PS1")
+            .split(separator: ";")
+            .map(String.init)
+        let dirSep = "\\"
+        #else
+        let pathext: [String] = [""]
+        let dirSep = "/"
+        #endif
         for path in paths where !path.isEmpty {
-            let candidate = "\(path.hasSuffix("/") ? String(path.dropLast()) : path)/\(binary)"
-            if fileManager.isExecutableFile(atPath: candidate), launchCandidateFilter(candidate, fileManager) {
-                return candidate
+            let dir = path.hasSuffix("/") || path.hasSuffix("\\") ? String(path.dropLast()) : path
+            for ext in pathext {
+                let candidate = "\(dir)\(dirSep)\(binary)\(ext)"
+                if fileManager.isExecutableFile(atPath: candidate), launchCandidateFilter(candidate, fileManager) {
+                    return candidate
+                }
             }
         }
         return nil

@@ -1,8 +1,11 @@
 import Foundation
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
+#endif
+#if os(Windows)
+import WinSDK
 #endif
 
 private let requestReadTimeoutMilliseconds: Int32 = 5000
@@ -13,6 +16,7 @@ struct CLILocalHTTPRequest {
     let host: String
     let path: String
     let queryItems: [String: String]
+    let token: String?
 
     static func parse(_ data: Data) -> Result<CLILocalHTTPRequest, CLILocalHTTPRequestParseError> {
         guard let raw = String(data: data, encoding: .utf8),
@@ -30,6 +34,7 @@ struct CLILocalHTTPRequest {
 
         let headerResult = Self.parseHeaders(raw)
         let host: String
+        let token: String?
         switch headerResult {
         case let .success(headers):
             let hosts = headers.compactMap { name, value in
@@ -39,6 +44,7 @@ struct CLILocalHTTPRequest {
             guard hosts.count == 1 else { return .failure(.duplicateHost) }
             guard Self.isAllowedLoopbackHost(candidate) else { return .failure(.disallowedHost) }
             host = candidate
+            token = headers.first(where: { $0.0.lowercased() == "x-codexbar-token" })?.1
         case let .failure(error):
             return .failure(error)
         }
@@ -57,7 +63,8 @@ struct CLILocalHTTPRequest {
             target: target,
             host: host,
             path: path,
-            queryItems: queryItems))
+            queryItems: queryItems,
+            token: token))
     }
 
     private static func parseHeaders(_ raw: String) -> Result<[(String, String)], CLILocalHTTPRequestParseError> {
@@ -196,14 +203,16 @@ final class CLILocalHTTPServer: @unchecked Sendable {
 
     private let host: String
     private let port: UInt16
+    private let authToken: String?
     private let handler: Handler
     private let stateLock = NSLock()
     private var listeningFD: Int32?
     private var stopRequested = false
 
-    init(host: String, port: UInt16, handler: @escaping Handler) {
+    init(host: String, port: UInt16, authToken: String? = nil, handler: @escaping Handler) {
         self.host = host
         self.port = port
+        self.authToken = authToken
         self.handler = handler
     }
 
@@ -213,11 +222,18 @@ final class CLILocalHTTPServer: @unchecked Sendable {
         self.stateLock.unlock()
     }
 
-    func run(onListening: @Sendable () -> Void = {}) async throws {
+    func run(onListening: @Sendable (UInt16) -> Void = { _ in }) async throws {
         ignoreSIGPIPE()
+
+        #if os(Windows)
+        var wsaData = WinSDK.WSADATA()
+        _ = WinSDK.WSAStartup(0x0202, &wsaData)  // Request WinSock 2.2
+        #endif
 
         #if canImport(Darwin)
         let streamType = SOCK_STREAM
+        #elseif os(Windows)
+        let streamType = WinSDK.SOCK_STREAM
         #else
         let streamType = Int32(SOCK_STREAM.rawValue)
         #endif
@@ -260,6 +276,17 @@ final class CLILocalHTTPServer: @unchecked Sendable {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
 
+        // Discover actual bound port (handles port 0 = ephemeral)
+        var boundAddress = sockaddr_in()
+        var boundLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let actualPort: UInt16
+        withUnsafeMutablePointer(to: &boundAddress) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
+                _ = getsockname(serverFD, sockPtr, &boundLen)
+            }
+        }
+        actualPort = UInt16(bigEndian: boundAddress.sin_port)
+
         guard listen(serverFD, 16) == 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
@@ -272,7 +299,18 @@ final class CLILocalHTTPServer: @unchecked Sendable {
                 closeSocket(serverFD)
             }
         }
-        onListening()
+        onListening(actualPort)
+
+        let authToken = self.authToken
+        let baseHandler = self.handler
+        let handler: Handler = { request in
+            if let required = authToken, request.token != required {
+                return CLILocalHTTPResponse(
+                    status: .forbidden,
+                    body: Data(#"{"error":"invalid or missing auth token"}"#.utf8))
+            }
+            return await baseHandler(request)
+        }
 
         while !self.isStopRequested {
             guard waitForReadable(serverFD, timeoutMilliseconds: 250) else {
@@ -280,6 +318,16 @@ final class CLILocalHTTPServer: @unchecked Sendable {
             }
             var clientAddress = sockaddr()
             var clientLength = socklen_t(MemoryLayout<sockaddr>.size)
+            #if os(Windows)
+            let clientSocket = WinSDK.accept(WinSDK.SOCKET(bitPattern: Int(serverFD)), &clientAddress, &clientLength)
+            guard clientSocket != WinSDK.INVALID_SOCKET else {
+                if self.isStopRequested { return }
+                let wsaErr = WinSDK.WSAGetLastError()
+                if wsaErr == WinSDK.WSAEINTR || wsaErr == WinSDK.WSAEWOULDBLOCK { continue }
+                throw POSIXError(POSIXErrorCode(rawValue: Int32(wsaErr)) ?? .EIO)
+            }
+            let clientFD = Int32(bitPattern: UInt32(clientSocket))
+            #else
             let clientFD = accept(serverFD, &clientAddress, &clientLength)
             guard clientFD >= 0 else {
                 if self.isStopRequested { return }
@@ -288,7 +336,7 @@ final class CLILocalHTTPServer: @unchecked Sendable {
                 }
                 throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
-            let handler = self.handler
+            #endif
             Task {
                 defer { closeSocket(clientFD) }
                 await handleClient(clientFD, handler: handler)
@@ -387,6 +435,19 @@ private func sendResponse(_ response: CLILocalHTTPResponse, to fd: Int32) {
 }
 
 private func waitForReadable(_ fd: Int32, timeoutMilliseconds: Int32) -> Bool {
+    #if os(Windows)
+    var pollFD = WinSDK.WSAPOLLFD(fd: WinSDK.SOCKET(bitPattern: Int(fd)), events: Int16(WinSDK.POLLRDNORM), revents: 0)
+    while true {
+        let result = WinSDK.WSAPoll(&pollFD, 1, timeoutMilliseconds)
+        if result > 0 {
+            return (pollFD.revents & Int16(WinSDK.POLLRDNORM)) != 0
+        }
+        if result == WinSDK.SOCKET_ERROR, WinSDK.WSAGetLastError() == WinSDK.WSAEINTR {
+            continue
+        }
+        return false
+    }
+    #else
     var pollFD = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
     while true {
         let result = poll(&pollFD, 1, timeoutMilliseconds)
@@ -398,11 +459,14 @@ private func waitForReadable(_ fd: Int32, timeoutMilliseconds: Int32) -> Bool {
         }
         return false
     }
+    #endif
 }
 
 private func sendNoSignalFlags() -> Int32 {
     #if canImport(Darwin)
     0
+    #elseif os(Windows)
+    0  // MSG_NOSIGNAL doesn't exist on Windows; WinSock2 doesn't deliver SIGPIPE
     #else
     Int32(MSG_NOSIGNAL)
     #endif
@@ -411,14 +475,17 @@ private func sendNoSignalFlags() -> Int32 {
 private func ignoreSIGPIPE() {
     #if canImport(Darwin)
     _ = Darwin.signal(SIGPIPE, SIG_IGN)
-    #else
+    #elseif canImport(Glibc)
     _ = Glibc.signal(SIGPIPE, SIG_IGN)
     #endif
+    // Windows: no SIGPIPE from sockets; no-op
 }
 
 private func closeSocket(_ fd: Int32) {
     #if canImport(Darwin)
     Darwin.close(fd)
+    #elseif os(Windows)
+    _ = WinSDK.closesocket(WinSDK.SOCKET(bitPattern: Int(fd)))
     #else
     Glibc.close(fd)
     #endif

@@ -22,6 +22,9 @@ struct ServeOptions: CommanderParsable {
         name: .long("request-timeout"),
         help: "Total per-request deadline in seconds; 0 disables (default: 30)")
     var requestTimeout: Double?
+
+    @Option(name: .long("auth-token"), help: "Require this token in X-CodexBar-Token header (optional)")
+    var authToken: String?
 }
 
 enum CLIServeRoute: Equatable {
@@ -59,6 +62,11 @@ enum CLIServeRouter {
 
 private struct ServeErrorPayload: Encodable {
     let error: String
+}
+
+private struct ServeStartPayload: Encodable {
+    let port: Int
+    let authToken: String?
 }
 
 private struct ServeHealthPayload: Encodable {
@@ -432,9 +440,10 @@ extension CodexBarCLI {
                 kind: .args)
         }
 
+        let authToken = values.options["authToken"]?.last
         let configStore = CodexBarConfigStore()
         let cache = CLIServeResponseCache()
-        let server = CLILocalHTTPServer(host: "127.0.0.1", port: port) { request in
+        let server = CLILocalHTTPServer(host: "127.0.0.1", port: port, authToken: authToken) { request in
             await Self.handleServeRequest(
                 request,
                 configStore: configStore,
@@ -449,8 +458,13 @@ extension CodexBarCLI {
         defer { signalMonitor.cancel() }
 
         do {
-            try await server.run {
-                Self.writeStderr("CodexBar server listening on http://127.0.0.1:\(port)\n")
+            try await server.run { actualPort in
+                let info = ServeStartPayload(port: Int(actualPort), authToken: authToken)
+                if let json = Self.encodeJSON(info, pretty: false) {
+                    print(json)
+                    fflush(stdout)
+                }
+                Self.writeStderr("CodexBar server listening on http://127.0.0.1:\(actualPort)\n")
             }
         } catch {
             await Self.shutdownServeSessions()
@@ -473,7 +487,7 @@ extension CodexBarCLI {
         } else {
             parsed = 8080
         }
-        guard parsed > 0, parsed <= Int(UInt16.max) else { return nil }
+        guard parsed >= 0, parsed <= Int(UInt16.max) else { return nil }
         return UInt16(parsed)
     }
 
