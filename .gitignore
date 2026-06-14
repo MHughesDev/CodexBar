@@ -27,6 +27,9 @@ Codexbar.app/
 Icon.iconset
 debug_*.swift
 
+# Claude Code internal data (worktrees, session state)
+.claude/
+
 # Misc
 .DS_Store
 .vscode/
