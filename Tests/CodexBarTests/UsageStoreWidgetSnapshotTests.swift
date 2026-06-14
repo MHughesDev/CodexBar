@@ -114,6 +114,52 @@ struct UsageStoreWidgetSnapshotTests {
     }
 
     @Test
+    func `widget snapshot labels antigravity compact fallback with model name`() async throws {
+        let suite = "UsageStoreWidgetSnapshotTests-antigravity-compact-fallback"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+
+        let settings = SettingsStore(
+            userDefaults: defaults,
+            configStore: testConfigStore(suiteName: suite),
+            zaiTokenStore: NoopZaiTokenStore(),
+            syntheticTokenStore: NoopSyntheticTokenStore())
+        settings.statusChecksEnabled = false
+
+        let store = UsageStore(
+            fetcher: UsageFetcher(environment: [:]),
+            browserDetection: BrowserDetection(cacheTTL: 0),
+            settings: settings)
+        let snapshot = try AntigravityStatusSnapshot(
+            modelQuotas: [
+                AntigravityModelQuota(
+                    label: "Experimental Model",
+                    modelId: "MODEL_PLACEHOLDER_NEW",
+                    remainingFraction: 0.36,
+                    resetTime: nil,
+                    resetDescription: nil),
+            ],
+            accountEmail: nil,
+            accountPlan: nil,
+            source: .local)
+            .toUsageSnapshot()
+        store._setSnapshotForTesting(snapshot, provider: .antigravity)
+
+        var widgetSnapshots: [WidgetSnapshot] = []
+        store._test_widgetSnapshotSaveOverride = { widgetSnapshots.append($0) }
+        defer { store._test_widgetSnapshotSaveOverride = nil }
+
+        store.persistWidgetSnapshot(reason: "antigravity-compact-fallback-test")
+        await store.widgetSnapshotPersistTask?.value
+
+        let entry = try #require(widgetSnapshots.last?.entries.first { $0.provider == .antigravity })
+        #expect(entry.primary == nil)
+        #expect(entry.usageRows?.map(\.id) == ["antigravity-compact-fallback-MODEL_PLACEHOLDER_NEW"])
+        #expect(entry.usageRows?.map(\.title) == ["Experimental Model"])
+        #expect(entry.usageRows?.compactMap(\.percentLeft) == [36])
+    }
+
+    @Test
     func `widget snapshot excludes mimo balance from quota rows`() async throws {
         let suite = "UsageStoreWidgetSnapshotTests-mimo-balance"
         let defaults = try #require(UserDefaults(suiteName: suite))

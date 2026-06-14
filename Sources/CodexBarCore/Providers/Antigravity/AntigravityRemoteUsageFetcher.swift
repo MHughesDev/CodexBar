@@ -241,9 +241,9 @@ public struct AntigravityRemoteUsageFetcher: Sendable {
     {
         var verifiedByModelID = Dictionary(
             uniqueKeysWithValues: verifiedQuotas.map { (Self.quotaKey($0), $0) })
-        var merged = modelQuotas.map { modelQuota in
+        var merged = modelQuotas.compactMap { modelQuota -> AntigravityModelQuota? in
             guard let verifiedQuota = verifiedByModelID.removeValue(forKey: Self.quotaKey(modelQuota)) else {
-                return modelQuota
+                return nil
             }
             let resetTime = verifiedQuota.resetTime ?? modelQuota.resetTime
             return AntigravityModelQuota(

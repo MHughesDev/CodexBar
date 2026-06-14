@@ -664,6 +664,72 @@ struct AntigravityRemoteUsageFetcherTests {
     }
 
     @Test
+    func `remote fetch drops full quota rows absent from partial verification`() async throws {
+        let env = try GeminiTestEnvironment()
+        defer { env.cleanup() }
+        try env.writeAntigravityCredentials(
+            accessToken: "token",
+            refreshToken: nil,
+            expiry: Date().addingTimeInterval(3600),
+            idToken: GeminiAPITestHelpers.makeIDToken(email: "user@example.com"),
+            email: "user@example.com")
+
+        let dataLoader = GeminiAPITestHelpers.dataLoader { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
+            }
+            if url.path == "/v1internal:loadCodeAssist" {
+                return GeminiAPITestHelpers.response(
+                    url: url.absoluteString,
+                    status: 200,
+                    body: GeminiAPITestHelpers.loadCodeAssistResponse(
+                        tierId: "standard-tier",
+                        projectId: "managed-project-123"))
+            }
+            if url.path == "/v1internal:fetchAvailableModels" {
+                return GeminiAPITestHelpers.response(
+                    url: url.absoluteString,
+                    status: 200,
+                    body: GeminiAPITestHelpers.jsonData([
+                        "models": [
+                            "claude-sonnet-4": [
+                                "displayName": "Claude Sonnet 4",
+                                "quotaInfo": ["remainingFraction": 1],
+                            ],
+                            "gemini-2.5-pro": [
+                                "displayName": "Gemini 2.5 Pro",
+                                "quotaInfo": ["remainingFraction": 1],
+                            ],
+                        ],
+                    ]))
+            }
+            if url.path == "/v1internal:retrieveUserQuota" {
+                return GeminiAPITestHelpers.response(
+                    url: url.absoluteString,
+                    status: 200,
+                    body: GeminiAPITestHelpers.jsonData([
+                        "buckets": [
+                            [
+                                "modelId": "gemini-2.5-pro",
+                                "remainingFraction": 0.5,
+                            ],
+                        ],
+                    ]))
+            }
+            return GeminiAPITestHelpers.response(url: url.absoluteString, status: 404, body: Data())
+        }
+
+        let snapshot = try await AntigravityRemoteUsageFetcher(
+            timeout: 1,
+            homeDirectory: env.homeURL.path,
+            dataLoader: dataLoader)
+            .fetch()
+
+        #expect(snapshot.modelQuotas.map(\.modelId) == ["gemini-2.5-pro"])
+        #expect(snapshot.modelQuotas.map(\.remainingFraction) == [0.5])
+    }
+
+    @Test
     func `remote fetch refreshes expired shared google token`() async throws {
         let env = try GeminiTestEnvironment()
         defer { env.cleanup() }

@@ -544,7 +544,7 @@ struct SettingsStoreCoverageTests {
     }
 
     @Test
-    func `removing last antigravity oauth account clears matching shared credentials`() async throws {
+    func `removing last antigravity oauth account clears matching shared credentials`() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("antigravity-shared-removal-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -567,8 +567,38 @@ struct SettingsStoreCoverageTests {
         settings.removeTokenAccount(provider: .antigravity, accountID: account.id)
 
         #expect(settings.tokenAccounts(for: .antigravity).isEmpty)
-        let sharedCredentials = try await Self.waitForSharedAntigravityCredentials(in: sharedStore) { $0 == nil }
-        #expect(sharedCredentials == nil)
+        #expect(try sharedStore.load() == nil)
+    }
+
+    @Test
+    func `removing antigravity oauth account preserves freshly reauthenticated credentials`() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("antigravity-shared-reauth-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let sharedStore = AntigravityOAuthCredentialsStore(
+            fileURL: root.appendingPathComponent("oauth_creds.json"))
+        let removed = AntigravityOAuthCredentials(
+            accessToken: "removed-access",
+            refreshToken: "removed-refresh",
+            expiryDate: Date(timeIntervalSince1970: 1_700_000_000),
+            email: "user@example.com")
+        let refreshed = AntigravityOAuthCredentials(
+            accessToken: "fresh-access",
+            refreshToken: "fresh-refresh",
+            expiryDate: Date(timeIntervalSince1970: 1_700_000_100),
+            email: "user@example.com")
+        try sharedStore.save(refreshed)
+        let settings = Self.makeSettingsStore(
+            suiteName: "SettingsStoreCoverageTests-antigravity-preserve-reauth",
+            antigravityOAuthCredentialsStore: sharedStore)
+
+        settings.upsertAntigravityOAuthAccount(removed)
+        let account = try #require(settings.selectedTokenAccount(for: .antigravity))
+        settings.removeTokenAccount(provider: .antigravity, accountID: account.id)
+
+        #expect(try sharedStore.load() == refreshed)
     }
 
     @Test

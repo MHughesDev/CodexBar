@@ -238,9 +238,8 @@ extension SettingsStore {
         }
         guard !hasMatchingRemainingAccount else { return }
 
-        let store = self.antigravityOAuthCredentialsStore
         Self.clearMatchingAntigravitySharedCredentials(
-            store: store,
+            store: self.antigravityOAuthCredentialsStore,
             removedCredentials: removedCredentials)
     }
 
@@ -248,20 +247,42 @@ extension SettingsStore {
         store: AntigravityOAuthCredentialsStore,
         removedCredentials: AntigravityOAuthCredentials)
     {
-        Task.detached(priority: .utility) {
-            do {
-                guard let sharedCredentials = try store.load(),
-                      antigravityCredentialsMatchAccount(sharedCredentials, removedCredentials)
-                else {
-                    return
-                }
-                try store.deleteIfPresent()
-            } catch {
-                CodexBarLog.logger(LogCategories.tokenAccounts).warning(
-                    "Failed to clear Antigravity OAuth cache after account removal",
-                    metadata: ["error": error.localizedDescription])
+        do {
+            try store.deleteIfPresent { sharedCredentials in
+                self.antigravitySharedCredentialsMatchRemovedAccount(
+                    sharedCredentials,
+                    removedCredentials)
             }
+        } catch {
+            CodexBarLog.logger(LogCategories.tokenAccounts).warning(
+                "Failed to clear Antigravity OAuth cache after account removal",
+                metadata: ["error": error.localizedDescription])
         }
+    }
+
+    private nonisolated static func antigravitySharedCredentialsMatchRemovedAccount(
+        _ shared: AntigravityOAuthCredentials,
+        _ removed: AntigravityOAuthCredentials) -> Bool
+    {
+        if let sharedRefreshToken = self.normalizedAntigravityCredentialToken(shared.refreshToken),
+           let removedRefreshToken = self.normalizedAntigravityCredentialToken(removed.refreshToken)
+        {
+            return sharedRefreshToken == removedRefreshToken
+        }
+        if let sharedAccessToken = self.normalizedAntigravityCredentialToken(shared.accessToken),
+           let removedAccessToken = self.normalizedAntigravityCredentialToken(removed.accessToken)
+        {
+            return sharedAccessToken == removedAccessToken
+        }
+        guard self.normalizedAntigravityCredentialToken(shared.refreshToken) == nil,
+              self.normalizedAntigravityCredentialToken(removed.refreshToken) == nil,
+              self.normalizedAntigravityCredentialToken(shared.accessToken) == nil,
+              self.normalizedAntigravityCredentialToken(removed.accessToken) == nil
+        else {
+            return false
+        }
+        return self.normalizedAntigravityAccountEmail(shared.resolvedAccountEmail)
+            == self.normalizedAntigravityAccountEmail(removed.resolvedAccountEmail)
     }
 
     private nonisolated static func antigravityCredentialsMatchAccount(

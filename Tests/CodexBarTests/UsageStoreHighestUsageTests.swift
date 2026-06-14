@@ -283,6 +283,65 @@ struct UsageStoreHighestUsageTests {
     }
 
     @Test
+    func `automatic metric keeps antigravity when a legacy detail row has quota`() {
+        let settings = SettingsStore(
+            configStore: testConfigStore(suiteName: "UsageStoreHighestUsageTests-antigravity-fallback-detail"),
+            zaiTokenStore: NoopZaiTokenStore(),
+            syntheticTokenStore: NoopSyntheticTokenStore())
+        settings.refreshFrequency = .manual
+        settings.statusChecksEnabled = false
+        settings.setMenuBarMetricPreference(.automatic, for: .antigravity)
+
+        let registry = ProviderRegistry.shared
+        if let codexMeta = registry.metadata[.codex] {
+            settings.setProviderEnabled(provider: .codex, metadata: codexMeta, enabled: true)
+        }
+        if let antigravityMeta = registry.metadata[.antigravity] {
+            settings.setProviderEnabled(provider: .antigravity, metadata: antigravityMeta, enabled: true)
+        }
+
+        let store = UsageStore(
+            fetcher: UsageFetcher(),
+            browserDetection: BrowserDetection(cacheTTL: 0),
+            settings: settings)
+        store._setSnapshotForTesting(
+            UsageSnapshot(
+                primary: RateWindow(usedPercent: 80, windowMinutes: nil, resetsAt: nil, resetDescription: nil),
+                secondary: nil,
+                updatedAt: Date()),
+            provider: .codex)
+        store._setSnapshotForTesting(
+            UsageSnapshot(
+                primary: nil,
+                secondary: nil,
+                tertiary: nil,
+                extraRateWindows: [
+                    NamedRateWindow(
+                        id: "antigravity-compact-fallback-model-a",
+                        title: "Model A",
+                        window: RateWindow(
+                            usedPercent: 100,
+                            windowMinutes: nil,
+                            resetsAt: nil,
+                            resetDescription: nil)),
+                    NamedRateWindow(
+                        id: "model-b",
+                        title: "Model B",
+                        window: RateWindow(
+                            usedPercent: 50,
+                            windowMinutes: nil,
+                            resetsAt: nil,
+                            resetDescription: nil)),
+                ],
+                updatedAt: Date()),
+            provider: .antigravity)
+
+        let highest = store.providerWithHighestUsage()
+        #expect(highest?.provider == .antigravity)
+        #expect(highest?.usedPercent == 100)
+    }
+
+    @Test
     func `automatic metric skips antigravity with no quota lanes`() {
         let settings = SettingsStore(
             configStore: testConfigStore(suiteName: "UsageStoreHighestUsageTests-antigravity-empty"),

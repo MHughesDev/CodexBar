@@ -64,7 +64,9 @@ extension UsageStore {
                 snapshot.primary?.usedPercent,
                 snapshot.secondary?.usedPercent,
                 snapshot.tertiary?.usedPercent,
-            ].compactMap(\.self)
+            ].compactMap(\.self) + (provider == .antigravity
+                ? Self.antigravityLegacyExtraUsedPercents(snapshot: snapshot)
+                : [])
             guard !percents.isEmpty else { return true }
             return percents.allSatisfy { $0 >= 100 }
         }
@@ -78,5 +80,11 @@ extension UsageStore {
         snapshot.extraRateWindows?
             .filter { $0.usageKnown && $0.id.hasPrefix(Self.antigravityQuotaSummaryWindowIDPrefix) }
             .map(\.window.usedPercent)
+    }
+
+    private nonisolated static func antigravityLegacyExtraUsedPercents(snapshot: UsageSnapshot) -> [Double] {
+        snapshot.extraRateWindows?
+            .filter { $0.usageKnown && !$0.id.hasPrefix(Self.antigravityQuotaSummaryWindowIDPrefix) }
+            .map(\.window.usedPercent) ?? []
     }
 }

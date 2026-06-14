@@ -756,6 +756,8 @@ final class UsageStore {
     enum SessionQuotaWindowSource: String {
         case primary
         case copilotSecondaryFallback
+        case antigravityQuotaSummary
+        case antigravityLegacy
     }
 
     struct QuotaWarningStateKey: Hashable {
@@ -766,6 +768,14 @@ final class UsageStore {
     struct QuotaWarningState {
         var lastRemaining: Double?
         var firedThresholds: Set<Int> = []
+        var source: SessionQuotaWindowSource?
+    }
+
+    func postQuotaWarning(_ event: QuotaWarningEvent, provider: UsageProvider) {
+        self.sessionQuotaNotifier.postQuotaWarning(
+            event: event,
+            provider: provider,
+            soundEnabled: self.settings.quotaWarningSoundEnabled)
     }
 
     func handleSessionQuotaTransition(provider: UsageProvider, snapshot: UsageSnapshot) {
@@ -843,79 +853,6 @@ final class UsageStore {
         self.sessionQuotaLogger.info(message)
 
         self.sessionQuotaNotifier.post(transition: transition, provider: provider, badge: nil)
-    }
-
-    func handleQuotaWarningTransitions(provider: UsageProvider, snapshot: UsageSnapshot) {
-        guard self.settings.quotaWarningNotificationsEnabled else { return }
-
-        let accountDisplayName = self.quotaWarningAccountDisplayName(provider: provider, snapshot: snapshot)
-        let primaryWindow = provider == .mimo ? nil : snapshot.primary
-        let secondaryWindow = provider == .mimo ? nil : snapshot.secondary
-        self.handleQuotaWarningTransition(
-            provider: provider,
-            window: .session,
-            rateWindow: primaryWindow,
-            accountDisplayName: accountDisplayName)
-        self.handleQuotaWarningTransition(
-            provider: provider,
-            window: .weekly,
-            rateWindow: secondaryWindow,
-            accountDisplayName: accountDisplayName)
-    }
-
-    private func handleQuotaWarningTransition(
-        provider: UsageProvider,
-        window: QuotaWarningWindow,
-        rateWindow: RateWindow?,
-        accountDisplayName: String?)
-    {
-        let key = QuotaWarningStateKey(provider: provider, window: window)
-        guard self.settings.quotaWarningEnabled(provider: provider, window: window) else {
-            self.quotaWarningState.removeValue(forKey: key)
-            return
-        }
-        guard let rateWindow else {
-            self.quotaWarningState.removeValue(forKey: key)
-            return
-        }
-
-        let thresholds = self.settings.resolvedQuotaWarningThresholds(provider: provider, window: window)
-        let currentRemaining = rateWindow.remainingPercent
-        var state = self.quotaWarningState[key] ?? QuotaWarningState()
-        let cleared = QuotaWarningNotificationLogic.thresholdsToClear(
-            currentRemaining: currentRemaining,
-            alreadyFired: state.firedThresholds)
-        state.firedThresholds.subtract(cleared)
-
-        if let threshold = QuotaWarningNotificationLogic.crossedThreshold(
-            previousRemaining: state.lastRemaining,
-            currentRemaining: currentRemaining,
-            thresholds: thresholds,
-            alreadyFired: state.firedThresholds)
-        {
-            state.firedThresholds.formUnion(QuotaWarningNotificationLogic.firedThresholdsAfterWarning(
-                threshold: threshold,
-                thresholds: thresholds))
-            self.sessionQuotaNotifier.postQuotaWarning(
-                event: QuotaWarningEvent(
-                    window: window,
-                    threshold: threshold,
-                    currentRemaining: currentRemaining,
-                    accountDisplayName: accountDisplayName),
-                provider: provider,
-                soundEnabled: self.settings.quotaWarningSoundEnabled)
-        }
-
-        state.lastRemaining = currentRemaining
-        self.quotaWarningState[key] = state
-    }
-
-    private func quotaWarningAccountDisplayName(provider: UsageProvider, snapshot: UsageSnapshot) -> String? {
-        guard !self.settings.hidePersonalInfo else { return nil }
-        let account = snapshot.accountEmail(for: provider)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let account, !account.isEmpty else { return nil }
-        return account
     }
 
     private func refreshStatus(_ provider: UsageProvider) async {

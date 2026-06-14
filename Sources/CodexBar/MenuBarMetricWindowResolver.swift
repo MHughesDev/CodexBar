@@ -20,11 +20,20 @@ enum MenuBarMetricWindowResolver {
         case .extraUsage:
             return Self.extraUsageWindow(snapshot: snapshot)
         case .tertiary:
-            return Self.window(in: snapshot, following: Self.tertiaryOrder(for: provider))
+            return Self.requestedWindow(
+                provider: provider,
+                snapshot: snapshot,
+                lanes: Self.tertiaryOrder(for: provider))
         case .primary:
-            return Self.window(in: snapshot, following: Self.primaryOrder(for: provider))
+            return Self.requestedWindow(
+                provider: provider,
+                snapshot: snapshot,
+                lanes: Self.primaryOrder(for: provider))
         case .secondary:
-            return Self.window(in: snapshot, following: Self.secondaryOrder(for: provider))
+            return Self.requestedWindow(
+                provider: provider,
+                snapshot: snapshot,
+                lanes: Self.secondaryOrder(for: provider))
         case .average:
             return Self.averageWindow(provider: provider, snapshot: snapshot, supportsAverage: supportsAverage)
         case .automatic:
@@ -91,6 +100,7 @@ enum MenuBarMetricWindowResolver {
                 primary: snapshot.primary,
                 secondary: snapshot.secondary,
                 tertiary: snapshot.tertiary)
+                ?? self.mostConstrainedAntigravityLegacyExtraWindow(snapshot: snapshot)
         }
         if provider == .perplexity {
             return snapshot.automaticPerplexityWindow()
@@ -126,6 +136,7 @@ enum MenuBarMetricWindowResolver {
     }
 
     private static let antigravityQuotaSummaryWindowIDPrefix = "antigravity-quota-summary-"
+    private static let antigravityCompactFallbackWindowIDPrefix = "antigravity-compact-fallback-"
 
     private static func mostConstrainedAntigravityQuotaSummaryWindow(snapshot: UsageSnapshot) -> RateWindow? {
         let windows = snapshot.extraRateWindows?
@@ -133,6 +144,27 @@ enum MenuBarMetricWindowResolver {
             .map(\.window) ?? []
         guard !windows.isEmpty else { return nil }
         return windows.max(by: { $0.usedPercent < $1.usedPercent })
+    }
+
+    private static func mostConstrainedAntigravityLegacyExtraWindow(snapshot: UsageSnapshot) -> RateWindow? {
+        let windows = snapshot.extraRateWindows?
+            .filter {
+                $0.usageKnown && $0.id.hasPrefix(Self.antigravityCompactFallbackWindowIDPrefix)
+            }
+            .map(\.window) ?? []
+        guard !windows.isEmpty else { return nil }
+        return windows.max(by: { $0.usedPercent < $1.usedPercent })
+    }
+
+    private static func requestedWindow(
+        provider: UsageProvider,
+        snapshot: UsageSnapshot,
+        lanes: [Lane]) -> RateWindow?
+    {
+        self.window(in: snapshot, following: lanes)
+            ?? (provider == .antigravity
+                ? self.mostConstrainedAntigravityLegacyExtraWindow(snapshot: snapshot)
+                : nil)
     }
 
     private static func window(in snapshot: UsageSnapshot, following lanes: [Lane]) -> RateWindow? {
