@@ -144,3 +144,18 @@ A second shell + Windows release pipeline is ongoing maintenance.
    target providers. *(Confirm field coverage during Phase 1.)*
 5. Reading the current user's Chromium cookie/Local State files needs no elevation
    outside MSIX sandbox constraints. *(Confirm in Phase 0/1; ties to R‑3.)*
+
+## Part D — Decisions Made (Phase 0)
+
+### OD‑1 · Windows UI framework — RESOLVED
+**Decision:** **Option B — C#/.NET WinUI 3 shell consuming `codexbar serve`.**
+The engine (Phases 0–1) is platform-agnostic; the shell will be built in C#/WinUI 3
+and communicate with the Swift engine over the existing `codexbar serve` HTTP/JSON
+interface. This minimises UI risk, leverages best-in-class Windows tooling, and
+avoids Swift/C# interop.
+
+### OD‑7 · Engine binding: sidecar `serve` vs in‑process FFI — RESOLVED
+**Decision:** **Sidecar HTTP via `codexbar serve`.**
+The `serve` command is already cross-platform, tested, and provider-agnostic. The
+C# shell will poll or subscribe to it. FFI will not be pursued unless polling
+latency is measured to be a concrete user-facing problem (revisit Phase 4+).

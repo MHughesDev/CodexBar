@@ -1,9 +1,11 @@
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
 #endif
 import Foundation
+
+#if canImport(Darwin) || os(Linux)
 
 actor ClaudeCLISession {
     static let shared = ClaudeCLISession()
@@ -486,3 +488,5 @@ actor ClaudeCLISession {
         }
     }
 }
+
+#endif // canImport(Darwin) || os(Linux)

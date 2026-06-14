@@ -1,6 +1,6 @@
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
 #endif
 import Foundation
@@ -110,7 +110,9 @@ protocol AntigravityCLISessionLaunchLocking: Sendable {
 /// the CLI cannot block on a full terminal buffer, and bounds the warm lifetime
 /// with an idle timer so CodexBar does not run an IDE backend forever.
 actor AntigravityCLISession {
+    #if canImport(Darwin) || os(Linux)
     static let shared = AntigravityCLISession()
+    #endif
     private static let log = CodexBarLog.logger(LogCategories.antigravity)
 
     enum ResetCause: Int {
@@ -155,6 +157,7 @@ actor AntigravityCLISession {
         var failureRelaunchThreshold: Int
         var terminationGracePeriod: TimeInterval
 
+        #if canImport(Darwin) || os(Linux)
         static func live() -> Self {
             Self(
                 launcher: AntigravityPTYProcessLauncher(),
@@ -195,6 +198,7 @@ actor AntigravityCLISession {
                 failureRelaunchThreshold: 2,
                 terminationGracePeriod: 1)
         }
+        #endif // canImport(Darwin) || os(Linux)
     }
 
     // MARK: State
@@ -219,10 +223,17 @@ actor AntigravityCLISession {
     private var lifecycleWaiters: [CheckedContinuation<Void, Never>] = []
     private var exclusiveProbeWaiters: [CheckedContinuation<Void, Never>] = []
 
+    #if canImport(Darwin) || os(Linux)
     init(dependencies: Dependencies = .live()) {
         self.dependencies = dependencies
         self.sessionIdleWindow = dependencies.idleWindow
     }
+    #else
+    init(dependencies: Dependencies) {
+        self.dependencies = dependencies
+        self.sessionIdleWindow = dependencies.idleWindow
+    }
+    #endif
 
     /// The pid of the running ``agy`` process, exposed so callers can discover
     /// its listening ports via `lsof`.
@@ -709,7 +720,9 @@ actor AntigravityCLISession {
         if proc.isRunning {
             proc.terminateRoot()
         }
+        #if canImport(Darwin) || os(Linux)
         proc.terminateTree(signal: SIGTERM, knownDescendants: descendants)
+        #endif
 
         let gracePeriod = self.dependencies.terminationGracePeriod
         if gracePeriod > 0 {
@@ -720,7 +733,9 @@ actor AntigravityCLISession {
         }
 
         if proc.isRunning {
+            #if canImport(Darwin) || os(Linux)
             proc.terminateTree(signal: SIGKILL, knownDescendants: descendants)
+            #endif
             await self.waitUntilProcessExits(proc, timeout: 1)
         } else {
             proc.killDescendants(descendants)
@@ -789,8 +804,10 @@ actor AntigravityCLISession {
 
             let knownDescendants = self.dependencies.descendantPIDs(record.pid)
             Self.log.debug("Reaping stale Antigravity CLI session", metadata: ["pid": "\(record.pid)"])
+            #if canImport(Darwin) || os(Linux)
             self.dependencies.terminateProcessTree(record.pid, record.processGroup, SIGTERM, knownDescendants)
             self.dependencies.terminateProcessTree(record.pid, record.processGroup, SIGKILL, knownDescendants)
+            #endif
             try? self.dependencies.recordStore.remove(record)
         }
     }
@@ -818,6 +835,8 @@ actor AntigravityCLISession {
 }
 
 // MARK: - Production Process Implementation
+
+#if canImport(Darwin) || os(Linux)
 
 struct AntigravityPTYProcessLauncher: AntigravityCLIProcessLaunching {
     static func defaultSignalsForSpawn() -> sigset_t {
@@ -1089,6 +1108,8 @@ final class AntigravitySpawnedPTYProcessHandle: AntigravityCLIProcessHandle, @un
     }
 }
 
+#endif // canImport(Darwin) || os(Linux)
+
 // MARK: - Production Stale Session Identity + Storage
 
 struct AntigravityProcessIdentityProvider: AntigravityCLIProcessIdentityProviding {
@@ -1113,7 +1134,7 @@ struct AntigravityProcessIdentityProvider: AntigravityCLIProcessIdentityProvidin
         guard size == Int32(MemoryLayout<proc_bsdinfo>.stride) else { return nil }
         let startEpoch = TimeInterval(info.pbi_start_tvsec) + (TimeInterval(info.pbi_start_tvusec) / 1_000_000)
         return AntigravityCLIProcessIdentity(executablePath: executablePath, startEpoch: startEpoch)
-        #else
+        #elseif os(Linux)
         let procDirectory = "/proc/\(pid)"
         guard let executablePath = try? FileManager.default.destinationOfSymbolicLink(
             atPath: "\(procDirectory)/exe"),
@@ -1141,6 +1162,8 @@ struct AntigravityProcessIdentityProvider: AntigravityCLIProcessIdentityProvidin
         }
         let startEpoch = bootEpoch + (startTicks / TimeInterval(clockTicksPerSecond))
         return AntigravityCLIProcessIdentity(executablePath: executablePath, startEpoch: startEpoch)
+        #else
+        return nil
         #endif
     }
 }
@@ -1236,6 +1259,7 @@ final class AntigravityFileCLISessionLaunchLock: AntigravityCLISessionLaunchLock
     }
 
     func withLock<T>(_ operation: () throws -> T) throws -> T {
+        #if canImport(Darwin) || os(Linux)
         let directory = self.fileURL.deletingLastPathComponent()
         try self.fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let fd = open(self.fileURL.path, O_CREAT | O_RDWR | O_CLOEXEC, S_IRUSR | S_IWUSR)
@@ -1253,5 +1277,8 @@ final class AntigravityFileCLISessionLaunchLock: AntigravityCLISessionLaunchLock
             }
         }
         return try operation()
+        #else
+        return try operation()
+        #endif
     }
 }

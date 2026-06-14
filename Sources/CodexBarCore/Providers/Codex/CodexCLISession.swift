@@ -1,9 +1,11 @@
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
 #endif
 import Foundation
+
+#if canImport(Darwin) || os(Linux)
 
 actor CodexCLISession {
     static let shared = CodexCLISession()
@@ -423,3 +425,5 @@ actor CodexCLISession {
         try handle.write(contentsOf: data)
     }
 }
+
+#endif // canImport(Darwin) || os(Linux)

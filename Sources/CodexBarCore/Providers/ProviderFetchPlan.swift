@@ -90,7 +90,9 @@ public struct ProviderFetchContext: Sendable {
 
 public enum ProviderCLISessionLifecycle {
     public static func shutdownPersistentSessions() async {
+        #if canImport(Darwin) || os(Linux)
         await AntigravityCLISession.shared.reset()
+        #endif
     }
 }
 

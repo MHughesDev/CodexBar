@@ -278,6 +278,7 @@ public struct ClaudeStatusProbe: Sendable {
         guard let resolved, self.isBinaryAvailable(resolved) else {
             throw ClaudeStatusProbeError.claudeNotInstalled
         }
+        #if canImport(Darwin) || os(Linux)
         do {
             // Use a more robust capture configuration than the standard `/status` scrape:
             // - Avoid the short idle-timeout which can terminate the session while CLI auth checks are still running.
@@ -295,6 +296,9 @@ public struct ClaudeStatusProbe: Sendable {
             await ClaudeCLISession.shared.reset()
             throw error
         }
+        #else
+        throw ClaudeStatusProbeError.claudeNotInstalled
+        #endif
     }
 
     public static func isClaudeBinaryAvailable(

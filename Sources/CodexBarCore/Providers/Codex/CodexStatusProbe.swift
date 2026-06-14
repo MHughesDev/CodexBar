@@ -209,6 +209,7 @@ public struct CodexStatusProbe {
         let workingDirectory = CodexStatusProbeIsolation.workingDirectory(environment: self.environment)
         let text: String
         if self.keepCLISessionsAlive {
+            #if canImport(Darwin) || os(Linux)
             do {
                 text = try await CodexCLISession.shared.captureStatus(
                     binary: binary,
@@ -229,6 +230,9 @@ public struct CodexStatusProbe {
                 }
                 throw CodexStatusProbeError.codexNotInstalled
             }
+            #else
+            throw CodexStatusProbeError.codexNotInstalled
+            #endif
         } else {
             let runner = TTYCommandRunner()
             let script = "/status"

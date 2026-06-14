@@ -52,7 +52,7 @@ let package = Package(
                     "CodexBarMacroSupport",
                     .product(name: "Crypto", package: "swift-crypto"),
                     .product(name: "Logging", package: "swift-log"),
-                    .product(name: "SweetCookieKit", package: "SweetCookieKit"),
+                    .product(name: "SweetCookieKit", package: "SweetCookieKit", condition: .when(platforms: [.macOS])),
                 ],
                 swiftSettings: [
                     .enableUpcomingFeature("StrictConcurrency"),

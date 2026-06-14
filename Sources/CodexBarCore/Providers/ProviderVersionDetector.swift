@@ -1,6 +1,6 @@
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
 #endif
 import Foundation
@@ -94,7 +94,9 @@ public enum ProviderVersionDetector {
         }
 
         guard proc.isRunning else { return true }
+        #if canImport(Darwin) || os(Linux)
         kill(proc.processIdentifier, SIGKILL)
+        #endif
         return exitSemaphore.wait(timeout: .now() + 1.0) == .success
     }
 }
