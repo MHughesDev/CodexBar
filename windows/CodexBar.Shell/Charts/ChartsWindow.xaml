@@ -1,0 +1,23 @@
+<Window
+    x:Class="CodexBar.Shell.Charts.ChartsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:CodexBar.Shell.Charts"
+    Title="Usage History">
+
+    <Grid RowSpacing="8" Padding="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Button Grid.Row="0"
+                Content="Refresh"
+                HorizontalAlignment="Right"
+                Click="RefreshButton_Click" />
+
+        <ScrollViewer Grid.Row="1">
+            <StackPanel x:Name="ChartsPanel" Spacing="24" />
+        </ScrollViewer>
+    </Grid>
+</Window>

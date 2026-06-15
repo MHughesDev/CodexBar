@@ -1,4 +1,5 @@
 using CodexBar.Shell.Engine;
+using CodexBar.Shell.Tray;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -8,6 +9,7 @@ namespace CodexBar.Shell.Settings;
 public sealed partial class SettingsWindow : Window
 {
     public CliRunner? CliRunner { get; set; }
+    public TrayController? TrayController { get; set; }
 
     public SettingsWindow()
     {
@@ -29,6 +31,7 @@ public sealed partial class SettingsWindow : Window
 
     private void NavigateTo(string tag)
     {
+        object? parameter = tag == "Display" ? TrayController : CliRunner;
         var pageType = tag switch
         {
             "Providers" => typeof(ProvidersPage),
@@ -39,9 +42,7 @@ public sealed partial class SettingsWindow : Window
             _           => null,
         };
         if (pageType is not null)
-        {
-            ContentFrame.Navigate(pageType, CliRunner);
-        }
+            ContentFrame.Navigate(pageType, parameter);
     }
 }
 
@@ -134,26 +135,82 @@ internal sealed class ProviderToggleViewModel(string id, bool enabled, CliRunner
 
 public sealed class DisplayPage : Page
 {
+    private TrayController? _tray;
+    private AppSettings _settings = AppSettings.Load();
+
     public DisplayPage()
     {
-        Content = new StackPanel
+        var panel = new StackPanel { Padding = new Thickness(20), Spacing = 16 };
+        Content = panel;
+
+        panel.Children.Add(new TextBlock
         {
-            Padding = new Thickness(20),
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = "Display",
-                    Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
-                },
-                new TextBlock
-                {
-                    Text = "Display settings coming in a future release.",
-                    Margin = new Thickness(0, 12, 0, 0),
-                    Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                },
-            },
+            Text = "Display",
+            Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
+        });
+
+        var showBarsToggle = new ToggleSwitch
+        {
+            Header = "Show usage bars",
+            IsOn = _settings.ShowUsageBars,
         };
+        showBarsToggle.Toggled += (s, _) =>
+        {
+            _settings = _settings with { ShowUsageBars = ((ToggleSwitch)s).IsOn };
+            _settings.Save();
+        };
+        panel.Children.Add(showBarsToggle);
+
+        var showCountdownToggle = new ToggleSwitch
+        {
+            Header = "Show reset countdown",
+            IsOn = _settings.ShowResetCountdown,
+        };
+        showCountdownToggle.Toggled += (s, _) =>
+        {
+            _settings = _settings with { ShowResetCountdown = ((ToggleSwitch)s).IsOn };
+            _settings.Save();
+        };
+        panel.Children.Add(showCountdownToggle);
+
+        var highlightToggle = new ToggleSwitch
+        {
+            Header = "Highlight highest-usage provider",
+            IsOn = _settings.HighlightHighestUsage,
+        };
+        highlightToggle.Toggled += (s, _) =>
+        {
+            _settings = _settings with { HighlightHighestUsage = ((ToggleSwitch)s).IsOn };
+            _settings.Save();
+        };
+        panel.Children.Add(highlightToggle);
+
+        panel.Children.Add(new TextBlock { Text = "Icon mode", Margin = new Thickness(0, 8, 0, 0) });
+        var iconModePanel = new StackPanel { Spacing = 8 };
+        var perProviderRadio = new RadioButton { Content = "Per-Provider Icons", IsChecked = !_settings.MergeIconsMode, GroupName = "iconMode" };
+        var mergeRadio = new RadioButton { Content = "Merge Icons (one icon, highest usage)", IsChecked = _settings.MergeIconsMode, GroupName = "iconMode" };
+
+        perProviderRadio.Checked += (_, _) =>
+        {
+            _settings = _settings with { MergeIconsMode = false };
+            _settings.Save();
+            if (_tray is not null) _tray.MergeIconsMode = false;
+        };
+        mergeRadio.Checked += (_, _) =>
+        {
+            _settings = _settings with { MergeIconsMode = true };
+            _settings.Save();
+            if (_tray is not null) _tray.MergeIconsMode = true;
+        };
+
+        iconModePanel.Children.Add(perProviderRadio);
+        iconModePanel.Children.Add(mergeRadio);
+        panel.Children.Add(iconModePanel);
+    }
+
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        _tray = e.Parameter as TrayController;
     }
 }
 

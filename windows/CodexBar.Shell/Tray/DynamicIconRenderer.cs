@@ -10,6 +10,7 @@ public static class DynamicIconRenderer
 
     // Cache icon by signature to avoid GDI churn on every poll when usage hasn't changed.
     private static (double fraction, bool stale, Icon icon)? _cached;
+    private static (string key, Icon icon)? _mergedCached;
 
     public static Icon Render(double usageFraction, bool isStale)
     {
@@ -55,6 +56,48 @@ public static class DynamicIconRenderer
         }
 
         return Icon.FromHandle(bmp.GetHicon());
+    }
+
+    public static Icon RenderMerged(IReadOnlyList<(string name, double fraction)> providers, bool isStale, int size = 32)
+    {
+        var key = string.Join("|", providers.Select(p => $"{p.fraction:F2}")) + $"|{isStale}|{size}";
+        if (_mergedCached is { } mc && mc.key == key) return mc.icon;
+        _mergedCached?.icon.Dispose();
+
+        using var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Color.Transparent);
+
+        var bgColor = isStale ? Color.FromArgb(200, 80, 80, 80) : Color.FromArgb(220, 30, 30, 30);
+        using var bgBrush = new SolidBrush(bgColor);
+        g.FillRoundedRect(bgBrush, new Rectangle(2, 2, size - 4, size - 4), 4);
+
+        var shown = providers.Take(4).ToList();
+        if (shown.Count > 0)
+        {
+            int segmentWidth = (size - 8) / shown.Count;
+            int barMaxHeight = size - 8;
+            for (int i = 0; i < shown.Count; i++)
+            {
+                var fraction = Math.Clamp(shown[i].fraction, 0, 1);
+                int fillHeight = (int)(barMaxHeight * fraction);
+                if (fillHeight <= 0) continue;
+                var fillColor = fraction >= 1.0
+                    ? Color.FromArgb(220, 255, 60, 60)
+                    : fraction >= 0.8
+                        ? Color.FromArgb(220, 255, 165, 0)
+                        : Color.FromArgb(220, 60, 200, 100);
+                using var fillBrush = new SolidBrush(fillColor);
+                int x = 4 + i * segmentWidth;
+                int y = size - 4 - fillHeight;
+                g.FillRoundedRect(fillBrush, new Rectangle(x, y, segmentWidth - 1, fillHeight), 2);
+            }
+        }
+
+        var icon = Icon.FromHandle(bmp.GetHicon());
+        _mergedCached = (key, icon);
+        return icon;
     }
 
     private static void FillRoundedRect(this Graphics g, Brush brush, Rectangle rect, int radius)

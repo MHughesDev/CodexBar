@@ -1,3 +1,4 @@
+using CodexBar.Shell.Engine;
 using H.NotifyIcon;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -9,6 +10,9 @@ public sealed class TrayController : IDisposable
     private readonly TaskbarIcon _trayIcon;
     private readonly FlyoutWindow _flyout;
     private bool _disposed;
+    private string? _pinnedProvider;
+
+    public bool MergeIconsMode { get; set; }
 
     public event EventHandler? SettingsRequested;
     public event EventHandler? QuitRequested;
@@ -19,7 +23,7 @@ public sealed class TrayController : IDisposable
         _trayIcon = new TaskbarIcon
         {
             ToolTipText = "CodexBar",
-            ContextFlyout = BuildContextMenu(),
+            ContextFlyout = BuildContextMenu([]),
         };
 
         _trayIcon.LeftClickCommand = new RelayCommand(ToggleFlyout);
@@ -34,6 +38,40 @@ public sealed class TrayController : IDisposable
             : $"CodexBar — {usageFraction:P0} used";
     }
 
+    public void UpdateIcon(IReadOnlyList<ProviderDto> providers, bool isStale)
+    {
+        if (!providers.Any()) return;
+
+        if (MergeIconsMode)
+        {
+            var segments = providers
+                .Select(p => (p.Provider, UsageFraction(p)))
+                .ToList();
+            var icon = DynamicIconRenderer.RenderMerged(segments, isStale);
+            _trayIcon.Icon = icon;
+            var highest = providers.MaxBy(UsageFraction);
+            _trayIcon.ToolTipText = isStale ? "CodexBar (stale)" : $"CodexBar — highest: {highest?.Provider}";
+            _trayIcon.ContextFlyout = BuildContextMenu(providers);
+        }
+        else
+        {
+            // Single-provider mode: show the pinned provider or the highest-usage one
+            var provider = _pinnedProvider is not null
+                ? providers.FirstOrDefault(p => p.Provider == _pinnedProvider) ?? providers.MaxBy(UsageFraction)
+                : providers.MaxBy(UsageFraction);
+            if (provider is null) return;
+            var fraction = UsageFraction(provider);
+            UpdateIcon(fraction, isStale);
+        }
+    }
+
+    private static double UsageFraction(ProviderDto p)
+    {
+        if (p.Usage is { Used: { } used, Limit: { } limit } && limit > 0)
+            return (double)used / limit;
+        return 0;
+    }
+
     private void ToggleFlyout()
     {
         if (_flyout.Visible)
@@ -42,9 +80,22 @@ public sealed class TrayController : IDisposable
             _flyout.ShowNearTray();
     }
 
-    private MenuFlyout BuildContextMenu()
+    private MenuFlyout BuildContextMenu(IReadOnlyList<ProviderDto> providers)
     {
         var menu = new MenuFlyout();
+
+        if (MergeIconsMode && providers.Count > 1)
+        {
+            var providerMenu = new MenuFlyoutSubItem { Text = "Provider" };
+            foreach (var p in providers)
+            {
+                var item = new MenuFlyoutItem { Text = p.Provider };
+                item.Click += (_, _) => { _pinnedProvider = p.Provider; };
+                providerMenu.Items.Add(item);
+            }
+            menu.Items.Add(providerMenu);
+            menu.Items.Add(new MenuFlyoutSeparator());
+        }
 
         var settingsItem = new MenuFlyoutItem { Text = "Settings" };
         settingsItem.Click += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
