@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace CodexBar.Shell.Engine;
 
@@ -66,17 +65,19 @@ public sealed class SidecarManager : IDisposable
         _enginePath = enginePath;
     }
 
+    // Port regex matches the stderr line: "CodexBar server listening on http://127.0.0.1:<port>"
+    private static readonly System.Text.RegularExpressions.Regex _portRegex =
+        new(@"listening on http://127\.0\.0\.1:(\d+)", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     public async Task StartAsync(CancellationToken ct = default)
     {
-        AuthToken = Guid.NewGuid().ToString();
-
         var psi = new ProcessStartInfo
         {
             FileName = _enginePath,
-            Arguments = $"serve --port 0 --auth-token {AuthToken}",
+            Arguments = "serve --port 0",
             UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = true,
             CreateNoWindow = true,
         };
 
@@ -85,15 +86,18 @@ public sealed class SidecarManager : IDisposable
 
         BindToJobObject(_process);
 
-        var firstLine = await _process.StandardOutput.ReadLineAsync(ct);
-        if (string.IsNullOrWhiteSpace(firstLine))
-            throw new InvalidOperationException("Engine did not emit port announcement on stdout.");
+        // Engine writes: "CodexBar server listening on http://127.0.0.1:<port>" to stderr.
+        while (await _process.StandardError.ReadLineAsync(ct) is { } line)
+        {
+            var match = _portRegex.Match(line);
+            if (match.Success)
+            {
+                Port = int.Parse(match.Groups[1].Value);
+                return;
+            }
+        }
 
-        var announcement = JsonSerializer.Deserialize<ServeReadyDto>(firstLine)
-            ?? throw new InvalidOperationException("Engine port announcement was not valid JSON.");
-
-        Port = announcement.Port;
-        // Auth token from announcement confirms the engine received our token correctly.
+        throw new InvalidOperationException("Engine exited before emitting port announcement on stderr.");
     }
 
     public void Stop()
