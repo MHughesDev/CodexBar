@@ -1,7 +1,7 @@
 import Foundation
-import SweetCookieKit
 
 #if os(macOS)
+import SweetCookieKit
 
 private let augmentCookieImportOrder: BrowserCookieImportOrder =
     ProviderDefaults.metadata[.augment]?.browserCookieOrder ?? Browser.defaultImportOrder

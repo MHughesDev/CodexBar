@@ -368,7 +368,7 @@ public enum BinaryLocator {
             .map(String.init)
         let dirSep = "\\"
         #else
-        let pathext: [String] = [""]
+        let pathext = [""]
         let dirSep = "/"
         #endif
         for path in paths where !path.isEmpty {
