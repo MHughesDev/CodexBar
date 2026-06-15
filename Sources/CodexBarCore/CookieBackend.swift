@@ -99,7 +99,9 @@ public struct NoopCookieBackend: CookieBackend {
         nil
     }
 
-    public func availableBrowsers() -> [String] { [] }
+    public func availableBrowsers() -> [String] {
+        []
+    }
 }
 #endif
 

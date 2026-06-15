@@ -31,11 +31,10 @@ public struct WindowsCookieBackend: CookieBackend {
         guard let host = url.host else { return nil }
 
         let browsers = WindowsBrowserDetection.availableBrowsers()
-        let candidates: [WindowsBrowserDetection.BrowserProfile]
-        if let hint = browserHint {
-            candidates = browsers.filter { $0.name.lowercased().contains(hint.lowercased()) }
+        let candidates: [WindowsBrowserDetection.BrowserProfile] = if let hint = browserHint {
+            browsers.filter { $0.name.lowercased().contains(hint.lowercased()) }
         } else {
-            candidates = browsers
+            browsers
         }
 
         for profile in candidates {
@@ -55,15 +54,18 @@ public struct WindowsCookieBackend: CookieBackend {
     private func extractCookies(from profile: WindowsBrowserDetection.BrowserProfile, host: String) async -> String? {
         switch profile.engine {
         case .chromium:
-            return await self.extractChromiumCookies(profile: profile, host: host)
+            await self.extractChromiumCookies(profile: profile, host: host)
         case .gecko:
-            return self.extractFirefoxCookies(profile: profile, host: host)
+            self.extractFirefoxCookies(profile: profile, host: host)
         }
     }
 
     // MARK: - Chromium (Chrome / Edge / Brave / Vivaldi / Opera)
 
-    private func extractChromiumCookies(profile: WindowsBrowserDetection.BrowserProfile, host: String) async -> String? {
+    private func extractChromiumCookies(
+        profile: WindowsBrowserDetection.BrowserProfile,
+        host: String
+    ) async -> String? {
         // Resolve AES-GCM key from Local State (DPAPI-protected).
         guard let aesKey = self.chromiumAESKey(localStatePath: profile.localStatePath) else {
             Self.log.debug("[\(profile.name)] Could not derive AES-GCM key from Local State")
@@ -127,7 +129,7 @@ public struct WindowsCookieBackend: CookieBackend {
         let sql = """
             SELECT name, encrypted_value FROM cookies
             WHERE host_key = ? OR host_key = ?
-            """
+        """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
             return nil
@@ -209,7 +211,7 @@ public struct WindowsCookieBackend: CookieBackend {
         let sql = """
             SELECT name, value FROM moz_cookies
             WHERE host = ? OR host = ?
-            """
+        """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
             return nil
@@ -276,7 +278,7 @@ private func aesGCMDecrypt(key: Data, nonce: Data, ciphertextWithTag: Data) -> S
                         key: keyBytes,
                         nonce: nonceBytes,
                         ciphertext: ctBytes,
-                        tag: tagBytes
+                        tag: tagBytes,
                     )
                 }
             }
@@ -289,7 +291,7 @@ private func bcryptAESGCMDecrypt(
     key: UnsafeRawBufferPointer,
     nonce: UnsafeRawBufferPointer,
     ciphertext: UnsafeRawBufferPointer,
-    tag: UnsafeRawBufferPointer
+    tag: UnsafeRawBufferPointer,
 ) -> String? {
     var hAlg: BCRYPT_ALG_HANDLE?
     guard BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_ALGORITHM, nil, 0) == 0, let hAlg else {
@@ -310,7 +312,7 @@ private func bcryptAESGCMDecrypt(
             BCRYPT_CHAINING_MODE,
             UnsafeMutablePointer(mutating: buf.baseAddress!),
             ULONG(buf.count * MemoryLayout<WCHAR>.size),
-            0
+            0,
         )
     }) == 0 else { return nil }
 
@@ -328,7 +330,7 @@ private func bcryptAESGCMDecrypt(
             0,
             UnsafeMutablePointer(mutating: keyBuf.baseAddress!),
             ULONG(keyBuf.count),
-            0
+            0,
         )
     }
     guard keyResult == 0, let hKey else { return nil }
@@ -365,7 +367,7 @@ private func bcryptAESGCMDecrypt(
                         ptBuf.baseAddress!,
                         ULONG(ptBuf.count),
                         &bytesWritten,
-                        0
+                        0,
                     )
                 }
             }
@@ -400,12 +402,12 @@ public enum WindowsBrowserDetection {
         var profiles: [BrowserProfile] = []
 
         if let localAppData = ProcessInfo.processInfo.environment["LOCALAPPDATA"] {
-            profiles += chromiumProfiles(under: localAppData)
+            profiles += self.chromiumProfiles(under: localAppData)
         }
         if let appData = ProcessInfo.processInfo.environment["APPDATA"] {
-            profiles += firefoxProfiles(under: appData)
+            profiles += self.firefoxProfiles(under: appData)
             // Opera uses %APPDATA%.
-            profiles += operaProfiles(under: appData)
+            profiles += self.operaProfiles(under: appData)
         }
 
         return profiles
@@ -415,9 +417,9 @@ public enum WindowsBrowserDetection {
 
     /// Known Chromium `User Data` paths relative to `%LOCALAPPDATA%`.
     private static let chromiumEntries: [(name: String, relativePath: String)] = [
-        ("Chrome",  "Google/Chrome/User Data"),
-        ("Edge",    "Microsoft/Edge/User Data"),
-        ("Brave",   "BraveSoftware/Brave-Browser/User Data"),
+        ("Chrome", "Google/Chrome/User Data"),
+        ("Edge", "Microsoft/Edge/User Data"),
+        ("Brave", "BraveSoftware/Brave-Browser/User Data"),
         ("Vivaldi", "Vivaldi/User Data"),
     ]
 
@@ -425,7 +427,7 @@ public enum WindowsBrowserDetection {
         var result: [BrowserProfile] = []
         let fm = FileManager.default
 
-        for entry in chromiumEntries {
+        for entry in self.chromiumEntries {
             let userDataPath = "\(localAppData)/\(entry.relativePath)"
             let localStatePath = "\(userDataPath)/Local State"
             guard fm.fileExists(atPath: localStatePath) else { continue }
@@ -448,7 +450,7 @@ public enum WindowsBrowserDetection {
                     name: label,
                     engine: .chromium,
                     localStatePath: localStatePath,
-                    cookiesDBPath: resolvedCookies
+                    cookiesDBPath: resolvedCookies,
                 ))
             }
         }
@@ -475,7 +477,7 @@ public enum WindowsBrowserDetection {
             name: "Opera",
             engine: .chromium,
             localStatePath: localStatePath,
-            cookiesDBPath: resolvedCookies
+            cookiesDBPath: resolvedCookies,
         )]
     }
 
@@ -492,7 +494,7 @@ public enum WindowsBrowserDetection {
                 name: "Firefox",
                 engine: .gecko,
                 localStatePath: "",
-                cookiesDBPath: dbPath
+                cookiesDBPath: dbPath,
             )
         }
     }
