@@ -1,9 +1,11 @@
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
 #endif
 import Foundation
+
+#if canImport(Darwin) || os(Linux)
 
 private enum TTYCommandRunnerActiveProcessRegistry {
     private static let condition = NSCondition()
@@ -1128,3 +1130,5 @@ extension TTYCommandRunner {
         self.resolveShutdownTargets(targets, hostProcessGroup: hostProcessGroup, groupResolver: groupResolver)
     }
 }
+
+#endif // canImport(Darwin) || os(Linux)

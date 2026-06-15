@@ -119,3 +119,28 @@ jobs:
           fi
           "$BIN" usage --provider codex --web 2>&1 | tee /tmp/codexbarcli-stderr.txt >/dev/null || true
           grep -q "macOS" /tmp/codexbarcli-stderr.txt
+
+  build-windows-engine:
+    timeout-minutes: 30
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Swift 6.2 on Windows
+        uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-6.2-release
+          tag: 6.2-RELEASE
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build CodexBarCLI (debug)
+        run: swift build --product CodexBarCLI
+
+      - name: Smoke test
+        shell: powershell
+        run: |
+          $bin = (swift build --product CodexBarCLI --show-bin-path) + "\CodexBarCLI.exe"
+          & $bin --help
+          & $bin --version

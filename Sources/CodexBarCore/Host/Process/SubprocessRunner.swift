@@ -1,6 +1,6 @@
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
 #endif
 import Foundation
@@ -113,6 +113,7 @@ public enum SubprocessRunner {
     private static func terminateProcess(_ process: Process, processGroup: pid_t?) -> Bool {
         guard process.isRunning else { return false }
         process.terminate()
+        #if canImport(Darwin) || os(Linux)
         if let pgid = processGroup {
             kill(-pgid, SIGTERM)
         }
@@ -126,6 +127,9 @@ public enum SubprocessRunner {
             }
             kill(process.processIdentifier, SIGKILL)
         }
+        #else
+        Thread.sleep(forTimeInterval: 0.4)
+        #endif
         return true
     }
 
@@ -183,7 +187,11 @@ public enum SubprocessRunner {
         stderrCapture.start()
 
         let pid = process.processIdentifier
+        #if canImport(Darwin) || os(Linux)
         let processGroup: pid_t? = setpgid(pid, pid) == 0 ? pid : nil
+        #else
+        let processGroup: pid_t? = nil
+        #endif
 
         let exitCodeTask = Task<Int32, Never> {
             await termination.wait()

@@ -173,6 +173,9 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
         idleWindow: TimeInterval?,
         resetAfterFetch: Bool) async throws -> ProviderFetchResult
     {
+        #if !canImport(Darwin) && !os(Linux)
+        throw AntigravityCLISession.SessionError.launchFailed("Antigravity PTY session is not supported on this platform")
+        #else
         let session = AntigravityCLISession.shared
         let pid = try await session.beginProbe(binary: binary, idleWindow: idleWindow)
         let deadline = Date().addingTimeInterval(5.0)
@@ -209,6 +212,7 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
         return self.makeResult(
             usage: usage,
             sourceLabel: Self.sourceLabel)
+        #endif // canImport(Darwin) || os(Linux)
     }
 
     static func shouldResetSessionAfterFetch(_ context: ProviderFetchContext) -> Bool {

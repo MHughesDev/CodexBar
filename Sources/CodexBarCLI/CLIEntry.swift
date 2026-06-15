@@ -2,7 +2,7 @@ import CodexBarCore
 import Commander
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
 #endif
 import Foundation

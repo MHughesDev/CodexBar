@@ -1,7 +1,7 @@
 import Foundation
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
 #endif
 
@@ -286,6 +286,11 @@ public enum BinaryLocator {
         home: String) -> String?
     {
         // swiftlint:enable function_parameter_count
+        #if os(Windows)
+        let pathSeparator: Character = ";"
+        #else
+        let pathSeparator: Character = ":"
+        #endif
         // 1) Explicit override
         if let override = env[overrideKey], fileManager.isExecutableFile(atPath: override) {
             return override
@@ -306,7 +311,7 @@ public enum BinaryLocator {
         if let existingPATH = env["PATH"],
            let pathHit = self.find(
                name,
-               in: existingPATH.split(separator: ":").map(String.init),
+               in: existingPATH.split(separator: pathSeparator).map(String.init),
                fileManager: fileManager,
                launchCandidateFilter: launchCandidateFilter)
         {
@@ -357,10 +362,22 @@ public enum BinaryLocator {
         fileManager: FileManager,
         launchCandidateFilter: (String, FileManager) -> Bool = { _, _ in true }) -> String?
     {
+        #if os(Windows)
+        let pathext = (ProcessInfo.processInfo.environment["PATHEXT"] ?? ".EXE;.CMD;.BAT;.PS1")
+            .split(separator: ";")
+            .map(String.init)
+        let dirSep = "\\"
+        #else
+        let pathext: [String] = [""]
+        let dirSep = "/"
+        #endif
         for path in paths where !path.isEmpty {
-            let candidate = "\(path.hasSuffix("/") ? String(path.dropLast()) : path)/\(binary)"
-            if fileManager.isExecutableFile(atPath: candidate), launchCandidateFilter(candidate, fileManager) {
-                return candidate
+            let dir = path.hasSuffix("/") || path.hasSuffix("\\") ? String(path.dropLast()) : path
+            for ext in pathext {
+                let candidate = "\(dir)\(dirSep)\(binary)\(ext)"
+                if fileManager.isExecutableFile(atPath: candidate), launchCandidateFilter(candidate, fileManager) {
+                    return candidate
+                }
             }
         }
         return nil
@@ -643,6 +660,9 @@ public enum ShellCommandLocator {
         arguments: [String],
         timeout: TimeInterval) -> Data?
     {
+        #if !canImport(Darwin) && !os(Linux)
+        return nil
+        #else
         // Pipes for stdout/stderr.  stdin is redirected from /dev/null in the child
         // via posix_spawn_file_actions_addopen below.
         var stdoutFds: (read: Int32, write: Int32) = (-1, -1)
@@ -819,6 +839,7 @@ public enum ShellCommandLocator {
             if stderrDone.fire() { drainGroup.leave() }
         }
         return stdoutCollector.drain()
+        #endif // canImport(Darwin) || os(Linux)
     }
 
     // swiftlint:enable cyclomatic_complexity
@@ -899,6 +920,16 @@ public enum PathBuilder {
         loginPATH: [String]? = LoginShellPathCache.shared.current,
         home _: String = NSHomeDirectory()) -> String
     {
+        #if os(Windows)
+        let pathSeparator: Character = ";"
+        let pathSeparatorString = ";"
+        let defaultFallback: [String] = []
+        #else
+        let pathSeparator: Character = ":"
+        let pathSeparatorString = ":"
+        let defaultFallback = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        #endif
+
         var parts: [String] = []
 
         if let loginPATH, !loginPATH.isEmpty {
@@ -906,11 +937,11 @@ public enum PathBuilder {
         }
 
         if let existing = env["PATH"], !existing.isEmpty {
-            parts.append(contentsOf: existing.split(separator: ":").map(String.init))
+            parts.append(contentsOf: existing.split(separator: pathSeparator).map(String.init))
         }
 
         if parts.isEmpty {
-            parts.append(contentsOf: ["/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+            parts.append(contentsOf: defaultFallback)
         }
 
         var seen = Set<String>()
@@ -922,7 +953,7 @@ public enum PathBuilder {
             return nil
         }
 
-        return deduped.joined(separator: ":")
+        return deduped.joined(separator: pathSeparatorString)
     }
 
     public static func debugSnapshot(
@@ -966,6 +997,9 @@ enum LoginShellPathCapturer {
         shell: String? = ProcessInfo.processInfo.environment["SHELL"],
         timeout: TimeInterval = Self.defaultTimeout) -> [String]?
     {
+        #if os(Windows)
+        return nil
+        #else
         let shellPath = (shell?.isEmpty == false) ? shell! : "/bin/zsh"
         let isCI = ["1", "true"].contains(ProcessInfo.processInfo.environment["CI"]?.lowercased())
         let marker = "__CODEXBAR_PATH__"
@@ -994,6 +1028,7 @@ enum LoginShellPathCapturer {
         let value = extracted.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
         return value.split(separator: ":").map(String.init)
+        #endif
     }
 }
 
