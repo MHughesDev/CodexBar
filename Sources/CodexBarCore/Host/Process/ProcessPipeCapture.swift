@@ -1,5 +1,10 @@
 import Foundation
 
+// Windows note (§2.3): `readabilityHandler` is a Foundation API that works on Windows via
+// swift-corelibs-foundation.  The underlying mechanism differs from macOS (Dispatch I/O vs.
+// GCD kevent), but the API contract — fire callback when data is available, deliver empty
+// Data on EOF — is maintained.  No platform guard is needed here; validate EOF semantics
+// on Windows pipes if you observe missing output at end-of-process.
 package final class ProcessPipeCapture: @unchecked Sendable {
     private let handle: FileHandle
     private let condition = NSCondition()
