@@ -1,0 +1,27 @@
+<Window
+    x:Class="CodexBar.Shell.Settings.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:CodexBar.Shell.Settings"
+    Title="CodexBar Settings">
+
+    <NavigationView x:Name="NavView"
+                    PaneDisplayMode="Left"
+                    IsBackButtonVisible="Collapsed"
+                    IsSettingsVisible="False"
+                    OpenPaneLength="180"
+                    SelectionChanged="NavView_SelectionChanged">
+
+        <NavigationView.MenuItems>
+            <NavigationViewItem Tag="Providers" Content="Providers" Icon="People" />
+            <NavigationViewItem Tag="Display"   Content="Display"   Icon="View" />
+            <NavigationViewItem Tag="Refresh"   Content="Refresh"   Icon="Refresh" />
+            <NavigationViewItem Tag="Advanced"  Content="Advanced"  Icon="Setting" />
+            <NavigationViewItem Tag="About"     Content="About"     Icon="Info" />
+        </NavigationView.MenuItems>
+
+        <!-- Providers pane -->
+        <Frame x:Name="ContentFrame" />
+
+    </NavigationView>
+</Window>

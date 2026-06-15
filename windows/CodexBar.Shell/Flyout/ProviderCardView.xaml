@@ -1,0 +1,68 @@
+<UserControl
+    x:Class="CodexBar.Shell.Flyout.ProviderCardView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            CornerRadius="6"
+            Padding="12,10">
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="6" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Provider name + account -->
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock x:Name="ProviderNameLabel"
+                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="AccountLabel"
+                               FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               Visibility="Collapsed" />
+                </StackPanel>
+
+                <!-- Status dot -->
+                <Ellipse Grid.Column="1"
+                         x:Name="StatusDot"
+                         Width="8" Height="8"
+                         VerticalAlignment="Center"
+                         Margin="8,0,0,0" />
+            </Grid>
+
+            <!-- Usage bar -->
+            <Grid Grid.Row="1">
+                <Rectangle Height="6" Fill="{ThemeResource ControlStrokeColorDefaultBrush}" RadiusX="3" RadiusY="3" />
+                <Rectangle x:Name="UsageBar" Height="6" RadiusX="3" RadiusY="3" HorizontalAlignment="Left" />
+            </Grid>
+
+            <!-- Metrics row -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="ResetLabel"
+                           Grid.Column="0"
+                           FontSize="11"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                <TextBlock x:Name="CreditsLabel"
+                           Grid.Column="1"
+                           FontSize="11"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>
