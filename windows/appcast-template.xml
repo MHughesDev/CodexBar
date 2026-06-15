@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>CodexBar</title>
+    <link>https://github.com/MHughesDev/CodexBar/releases</link>
+    <description>CodexBar release feed</description>
+    <item>
+      <title>CodexBar ${VERSION}</title>
+      <pubDate>${PUB_DATE}</pubDate>
+      <sparkle:version>${VERSION}</sparkle:version>
+      <enclosure url="https://github.com/MHughesDev/CodexBar/releases/download/v${VERSION}/CodexBar-${VERSION}-win-x64.msix"
+                 sparkle:version="${VERSION}"
+                 type="application/octet-stream"
+                 length="${SIZE}"
+                 sparkle:dsaSignature="${DSA_SIG}"/>
+    </item>
+  </channel>
+</rss>
