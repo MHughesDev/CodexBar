@@ -1,0 +1,40 @@
+<Window
+    x:Class="CodexBar.Shell.Auth.ManualCookieDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid Padding="24" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="TitleText"
+                   Grid.Row="0"
+                   Style="{StaticResource SubtitleTextBlockStyle}" />
+
+        <TextBlock Grid.Row="1"
+                   TextWrapping="Wrap"
+                   Text="Automatic cookie extraction is not available for this browser. Open DevTools (F12), go to Application → Cookies, and paste the cookie value below." />
+
+        <TextBox x:Name="CookiePasteBox"
+                 Grid.Row="2"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 PlaceholderText="Paste cookie value here"
+                 Margin="0,4,0,0" />
+
+        <StackPanel Grid.Row="3"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    HorizontalAlignment="Right">
+            <Button Content="Save"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Click="SaveButton_Click" />
+            <Button Content="Cancel"
+                    Click="CancelButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

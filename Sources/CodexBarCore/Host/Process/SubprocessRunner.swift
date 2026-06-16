@@ -1,9 +1,87 @@
 #if canImport(Darwin)
 import Darwin
+#elseif os(Windows)
+import WinSDK
 #elseif canImport(Glibc)
 import Glibc
 #endif
 import Foundation
+
+#if os(Windows)
+/// Encapsulates Windows Job Object lifecycle for process-tree management.
+///
+/// A Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` ensures the entire
+/// child process tree is terminated when the job handle is closed or
+/// `terminate()` is called — the Windows equivalent of `kill(-pgid, SIGKILL)`.
+///
+/// Implemented as a class so it can be captured across `@Sendable` closures
+/// and async boundaries without copying. Internal locking ensures safe
+/// concurrent access from timeout callbacks and task-cancellation handlers.
+private final class WindowsProcessTree: @unchecked Sendable {
+    private let lock = NSLock()
+    private var jobHandle: HANDLE = INVALID_HANDLE_VALUE
+    private var isClosed = false
+
+    /// Creates a Job Object and assigns the given process to it.
+    /// Returns `nil` when job-object creation or assignment fails (non-fatal:
+    /// the process still runs, it just won't be tree-killed on Windows).
+    init?(processHandle: HANDLE) {
+        guard processHandle != INVALID_HANDLE_VALUE else { return nil }
+
+        // Create an anonymous Job Object.
+        guard let handle = CreateJobObjectW(nil, nil) else { return nil }
+
+        // Configure the job so that closing its handle terminates all children.
+        var extInfo = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+        extInfo.BasicLimitInformation.LimitFlags = DWORD(JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)
+        let extInfoSize = DWORD(MemoryLayout<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>.size)
+        withUnsafeMutablePointer(to: &extInfo) { ptr in
+            _ = SetInformationJobObject(
+                handle,
+                JobObjectExtendedLimitInformation,
+                ptr,
+                extInfoSize)
+        }
+
+        // Assign the child process to the job.
+        guard AssignProcessToJobObject(handle, processHandle) else {
+            CloseHandle(handle)
+            return nil
+        }
+
+        self.jobHandle = handle
+    }
+
+    deinit {
+        self.close()
+    }
+
+    /// Terminates all processes in the job tree immediately.
+    func terminate() {
+        self.lock.lock()
+        let handle = self.jobHandle
+        self.lock.unlock()
+        guard handle != INVALID_HANDLE_VALUE else { return }
+        _ = TerminateJobObject(handle, 1)
+    }
+
+    /// Releases the job handle. Because `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`
+    /// is set, this also kills the process tree if `terminate()` was not
+    /// already called.
+    func close() {
+        self.lock.lock()
+        guard !self.isClosed, self.jobHandle != INVALID_HANDLE_VALUE else {
+            self.lock.unlock()
+            return
+        }
+        let handle = self.jobHandle
+        self.jobHandle = INVALID_HANDLE_VALUE
+        self.isClosed = true
+        self.lock.unlock()
+        CloseHandle(handle)
+    }
+}
+#endif
 
 public enum SubprocessRunnerError: LocalizedError, Sendable {
     case binaryNotFound(String)
@@ -107,13 +185,39 @@ public enum SubprocessRunner {
         }
     }
 
-    /// Terminates a process and its process group, escalating from SIGTERM to SIGKILL.
+    #if os(Windows)
+    /// Terminates a process using Job Object tree-kill (Windows).
+    /// Returns `true` if the process was running and termination was initiated.
+    @discardableResult
+    private static func terminateProcess(
+        _ process: Process,
+        windowsProcessTree: WindowsProcessTree? = nil) -> Bool
+    {
+        guard process.isRunning else { return false }
+        // Foundation's Process.terminate() sends WM_CLOSE; for CLI tools we escalate
+        // to TerminateJobObject which kills the entire process tree.
+        process.terminate()
+        if let tree = windowsProcessTree {
+            tree.terminate()
+            tree.close()
+        }
+        let killDeadline = Date().addingTimeInterval(0.4)
+        while process.isRunning, Date() < killDeadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        // Force-terminate the root process if it's still alive after the job kill.
+        if process.isRunning {
+            process.terminate()
+        }
+        return true
+    }
+    #else
+    /// Terminates a process and its process group, escalating from SIGTERM to SIGKILL (POSIX).
     /// Returns `true` if the process was actually killed, `false` if it had already exited.
     @discardableResult
     private static func terminateProcess(_ process: Process, processGroup: pid_t?) -> Bool {
         guard process.isRunning else { return false }
         process.terminate()
-        #if canImport(Darwin) || os(Linux)
         if let pgid = processGroup {
             kill(-pgid, SIGTERM)
         }
@@ -127,11 +231,9 @@ public enum SubprocessRunner {
             }
             kill(process.processIdentifier, SIGKILL)
         }
-        #else
-        Thread.sleep(forTimeInterval: 0.4)
-        #endif
         return true
     }
+    #endif
 
     // MARK: - Public API
 
@@ -187,10 +289,24 @@ public enum SubprocessRunner {
         stderrCapture.start()
 
         let pid = process.processIdentifier
-        #if canImport(Darwin) || os(Linux)
-        let processGroup: pid_t? = setpgid(pid, pid) == 0 ? pid : nil
+
+        // --- Process-tree management (platform-specific) ---
+        // On Windows: Job Object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE kills the
+        // entire child tree when the job handle is closed or TerminateJobObject is called.
+        // On POSIX: setpgid promotes the child into its own process group so kill(-pgid,…)
+        // reaches every descendant.
+        #if os(Windows)
+        let winTree: WindowsProcessTree? = {
+            guard let procHandle = OpenProcess(
+                DWORD(PROCESS_ALL_ACCESS), false, DWORD(pid))
+            else { return nil }
+            // WindowsProcessTree takes ownership of the job handle; close our
+            // temporary process handle immediately after assigning to the job.
+            defer { CloseHandle(procHandle) }
+            return WindowsProcessTree(processHandle: procHandle)
+        }()
         #else
-        let processGroup: pid_t? = nil
+        let processGroup: pid_t? = setpgid(pid, pid) == 0 ? pid : nil
         #endif
 
         let exitCodeTask = Task<Int32, Never> {
@@ -203,7 +319,11 @@ public enum SubprocessRunner {
         timeoutTimer.setEventHandler {
             guard process.isRunning else { return }
             killedByTimeout.set()
+            #if os(Windows)
+            self.terminateProcess(process, windowsProcessTree: winTree)
+            #else
             self.terminateProcess(process, processGroup: processGroup)
+            #endif
         }
         timeoutTimer.resume()
         let timeoutTimerBox = TimeoutTimer(timer: timeoutTimer)
@@ -216,7 +336,11 @@ public enum SubprocessRunner {
                 return code
             } onCancel: {
                 timeoutTimerBox.cancel()
+                #if os(Windows)
+                self.terminateProcess(process, windowsProcessTree: winTree)
+                #else
                 self.terminateProcess(process, processGroup: processGroup)
+                #endif
             }
             timeoutTimerBox.cancel()
 
@@ -272,7 +396,11 @@ public enum SubprocessRunner {
                     "duration_ms": "\(Int(duration * 1000))",
                 ])
             // Safety net: ensure the process is dead (may already be killed by timeout timer).
+            #if os(Windows)
+            self.terminateProcess(process, windowsProcessTree: winTree)
+            #else
             self.terminateProcess(process, processGroup: processGroup)
+            #endif
             exitCodeTask.cancel()
             stdoutCapture.stop()
             stderrCapture.stop()

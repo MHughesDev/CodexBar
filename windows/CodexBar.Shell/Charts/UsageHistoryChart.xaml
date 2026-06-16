@@ -1,0 +1,14 @@
+<UserControl
+    x:Class="CodexBar.Shell.Charts.UsageHistoryChart"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:lvc="using:LiveChartsCore.SkiaSharpView.WinUI">
+
+    <StackPanel Spacing="4">
+        <TextBlock x:Name="ChartTitle"
+                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+        <lvc:CartesianChart x:Name="Chart"
+                            Width="600"
+                            Height="300" />
+    </StackPanel>
+</UserControl>

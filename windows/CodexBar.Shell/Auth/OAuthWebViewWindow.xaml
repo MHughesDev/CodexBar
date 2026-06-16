@@ -1,0 +1,13 @@
+<Window
+    x:Class="CodexBar.Shell.Auth.OAuthWebViewWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:wv2="using:Microsoft.Web.WebView2.WinUI">
+
+    <Grid>
+        <wv2:WebView2 x:Name="WebView"
+                      NavigationStarting="WebView_NavigationStarting"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch" />
+    </Grid>
+</Window>
