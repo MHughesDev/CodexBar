@@ -227,7 +227,7 @@ final class CLILocalHTTPServer: @unchecked Sendable {
 
         #if os(Windows)
         var wsaData = WinSDK.WSADATA()
-        _ = WinSDK.WSAStartup(0x0202, &wsaData)  // Request WinSock 2.2
+        _ = WinSDK.WSAStartup(0x0202, &wsaData) // Request WinSock 2.2
         #endif
 
         #if canImport(Darwin)
@@ -466,7 +466,7 @@ private func sendNoSignalFlags() -> Int32 {
     #if canImport(Darwin)
     0
     #elseif os(Windows)
-    0  // MSG_NOSIGNAL doesn't exist on Windows; WinSock2 doesn't deliver SIGPIPE
+    0 // MSG_NOSIGNAL doesn't exist on Windows; WinSock2 doesn't deliver SIGPIPE
     #else
     Int32(MSG_NOSIGNAL)
     #endif

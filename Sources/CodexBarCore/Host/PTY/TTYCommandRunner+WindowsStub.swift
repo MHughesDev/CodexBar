@@ -172,9 +172,13 @@ public struct TTYCommandRunner: Sendable {
     public static func updateActiveProcessGroupForAppShutdown(pid: Int32, processGroup: Int32?) {}
 
     @discardableResult
-    static func registerActiveProcessForAppShutdown(pid: pid_t, binary: String) -> Bool { false }
+    static func registerActiveProcessForAppShutdown(pid: pid_t, binary: String) -> Bool {
+        false
+    }
 
-    static func beginActiveProcessLaunchForAppShutdown() -> Bool { false }
+    static func beginActiveProcessLaunchForAppShutdown() -> Bool {
+        false
+    }
 
     static func endActiveProcessLaunchForAppShutdown() {}
 
@@ -185,22 +189,34 @@ public struct TTYCommandRunner: Sendable {
     static func _test_trackProcess(pid: pid_t, binary: String, processGroup: pid_t?) {}
 
     @discardableResult
-    static func _test_registerTrackedProcess(pid: pid_t, binary: String) -> Bool { false }
+    static func _test_registerTrackedProcess(pid: pid_t, binary: String) -> Bool {
+        false
+    }
 
-    static func _test_trackedProcessCount() -> Int { 0 }
+    static func _test_trackedProcessCount() -> Int {
+        0
+    }
 
-    static func _test_beginTrackedProcessLaunch() -> Bool { false }
+    static func _test_beginTrackedProcessLaunch() -> Bool {
+        false
+    }
 
     static func _test_endTrackedProcessLaunch() {}
 
     static func _test_drainTrackedProcessesForShutdown(
         onFenceSet: (() -> Void)? = nil)
-        -> [(pid: pid_t, binary: String, processGroup: pid_t?)] { [] }
+        -> [(pid: pid_t, binary: String, processGroup: pid_t?)]
+    {
+        []
+    }
 
     static func _test_resolveShutdownTargets(
         _ targets: [(pid: pid_t, binary: String, processGroup: pid_t?)],
         hostProcessGroup: pid_t,
-        groupResolver: (pid_t) -> pid_t) -> [(pid: pid_t, binary: String, processGroup: pid_t?)] { [] }
+        groupResolver: (pid_t) -> pid_t) -> [(pid: pid_t, binary: String, processGroup: pid_t?)]
+    {
+        []
+    }
 
     // MARK: Binary resolution
 
@@ -282,7 +298,9 @@ public struct TTYCommandRunner: Sendable {
         return env
     }
 
-    static func locateBundledHelper(_ name: String) -> String? { nil }
+    static func locateBundledHelper(_ name: String) -> String? {
+        nil
+    }
 
     // MARK: Main PTY entry point (ConPTY)
 
@@ -400,7 +418,8 @@ public struct TTYCommandRunner: Sendable {
             var buf = [UInt8](repeating: 0, count: 8192)
             var bytesAvail: DWORD = 0
             guard PeekNamedPipe(outputRead, nil, 0, nil, &bytesAvail, nil),
-                  bytesAvail > 0 else {
+                  bytesAvail > 0
+            else {
                 return Data()
             }
             let toRead = min(bytesAvail, DWORD(buf.count))
@@ -534,6 +553,7 @@ public struct TTYCommandRunner: Sendable {
 }
 
 // MARK: - RollingBuffer (Windows copy)
+
 // On Windows, TTYCommandRunner.swift is excluded by #if canImport(Darwin) || os(Linux).
 // RollingBuffer is a pure-Swift utility needed by the run() loop above.
 
@@ -575,9 +595,14 @@ extension TTYCommandRunner {
 enum TTYProcessTreeTerminator {
     static func descendantPIDs(
         of rootPID: pid_t,
-        childResolver: (pid_t) -> [pid_t] = Self.currentChildPIDs(of:)) -> [pid_t] { [] }
+        childResolver: (pid_t) -> [pid_t] = Self.currentChildPIDs(of:)) -> [pid_t]
+    {
+        []
+    }
 
-    static func currentChildPIDs(of parentPID: pid_t) -> [pid_t] { [] }
+    static func currentChildPIDs(of parentPID: pid_t) -> [pid_t] {
+        []
+    }
 
     static func terminateProcessTree(
         rootPID: pid_t,
