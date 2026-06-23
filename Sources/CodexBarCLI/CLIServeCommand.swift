@@ -1,9 +1,6 @@
 import CodexBarCore
 import Commander
 import Foundation
-#if canImport(Glibc)
-@preconcurrency import Glibc
-#endif
 
 struct ServeOptions: CommanderParsable {
     @Flag(names: [.short("v"), .long("verbose")], help: "Enable verbose logging")
@@ -465,7 +462,9 @@ extension CodexBarCLI {
                 let info = ServeStartPayload(port: Int(actualPort), authToken: authToken)
                 if let json = Self.encodeJSON(info, pretty: false) {
                     print(json)
-                    fflush(stdout)
+                    // Passing NULL flushes all open output streams, avoiding a direct
+                    // reference to the `stdout` global (not concurrency-safe under Swift 6).
+                    fflush(nil)
                 }
                 Self.writeStderr("CodexBar server listening on http://127.0.0.1:\(actualPort)\n")
             }
