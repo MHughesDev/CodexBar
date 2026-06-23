@@ -13,7 +13,7 @@ protocol SecretStore {
 enum SecretStoreFactory {
     static func make() -> any SecretStore {
         #if os(macOS)
-        return macOSKeychainSecretStore()
+        return MacOSKeychainSecretStore()
         #elseif os(Windows)
         return WindowsCredentialSecretStore()
         #else
@@ -25,7 +25,7 @@ enum SecretStoreFactory {
 // MARK: - macOS backend
 
 #if os(macOS)
-struct macOSKeychainSecretStore: SecretStore {
+struct MacOSKeychainSecretStore: SecretStore {
     func load<T: Codable>(key: KeychainCacheStore.Key, as type: T.Type) -> KeychainCacheStore.LoadResult<T> {
         KeychainCacheStore.load(key: key, as: type)
     }
@@ -75,7 +75,7 @@ import WinSDK
 /// Uses CredWriteW/CredReadW/CredDeleteW/CredEnumerateW (CRED_TYPE_GENERIC).
 /// Blob size limit: 2,560 bytes per credential. Entries exceeding this are
 /// stored as DPAPI-encrypted files under %LOCALAPPDATA%\CodexBar\creds\.
-// TODO: verify exact WinSDK API names on Windows CI
+/// TODO: verify exact WinSDK API names on Windows CI
 struct WindowsCredentialSecretStore: SecretStore {
     private static let targetPrefix = "CodexBar:"
     private static let log = CodexBarLog.logger(LogCategories.keychainCache)

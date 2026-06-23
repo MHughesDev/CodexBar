@@ -224,23 +224,55 @@ final class WindowsPTY: @unchecked Sendable {
                     let envPtr = envBytes.baseAddress.map { UnsafeMutableRawPointer(mutating: $0) }
                     if var wdBuf = workDirW {
                         CreateProcessW(
-                            nil, &cmdLineW, nil, nil, false,
-                            creationFlags, envPtr, &wdBuf, startupPtr, &pi)
+                            nil,
+                            &cmdLineW,
+                            nil,
+                            nil,
+                            false,
+                            creationFlags,
+                            envPtr,
+                            &wdBuf,
+                            startupPtr,
+                            &pi)
                     } else {
                         CreateProcessW(
-                            nil, &cmdLineW, nil, nil, false,
-                            creationFlags, envPtr, nil, startupPtr, &pi)
+                            nil,
+                            &cmdLineW,
+                            nil,
+                            nil,
+                            false,
+                            creationFlags,
+                            envPtr,
+                            nil,
+                            startupPtr,
+                            &pi)
                     }
                 }
             } else {
                 if var wdBuf = workDirW {
                     CreateProcessW(
-                        nil, &cmdLineW, nil, nil, false,
-                        creationFlags, nil, &wdBuf, startupPtr, &pi)
+                        nil,
+                        &cmdLineW,
+                        nil,
+                        nil,
+                        false,
+                        creationFlags,
+                        nil,
+                        &wdBuf,
+                        startupPtr,
+                        &pi)
                 } else {
                     CreateProcessW(
-                        nil, &cmdLineW, nil, nil, false,
-                        creationFlags, nil, nil, startupPtr, &pi)
+                        nil,
+                        &cmdLineW,
+                        nil,
+                        nil,
+                        false,
+                        creationFlags,
+                        nil,
+                        nil,
+                        startupPtr,
+                        &pi)
                 }
             }
         }

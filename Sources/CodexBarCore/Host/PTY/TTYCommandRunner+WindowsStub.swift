@@ -304,11 +304,11 @@ public struct TTYCommandRunner: Sendable {
 
     // MARK: Main PTY entry point (ConPTY)
 
+    // swiftlint:disable function_body_length cyclomatic_complexity
     /// Windows ConPTY-backed equivalent of the POSIX `run(binary:send:options:onURLDetected:)`.
     ///
     /// Creates a `WindowsPTY`, spawns the process, drives the read/write loop,
     /// and returns the captured output — matching the contract of the POSIX implementation.
-    // swiftlint:disable function_body_length
     public func run(
         binary: String,
         send script: String,
@@ -549,7 +549,7 @@ public struct TTYCommandRunner: Sendable {
         guard !text.isEmpty else { throw Error.timedOut }
         return Result(text: text)
     }
-    // swiftlint:enable function_body_length
+    // swiftlint:enable function_body_length cyclomatic_complexity
 }
 
 // MARK: - RollingBuffer (Windows copy)

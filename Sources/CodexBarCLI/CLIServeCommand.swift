@@ -2,6 +2,10 @@ import CodexBarCore
 import Commander
 import Foundation
 
+/// `stdout` is a fixed process-lifetime C global; capturing it once here avoids the
+/// Swift 6 concurrency-safety diagnostic on direct `stdout` references.
+private nonisolated(unsafe) let cliServeStandardOutput = stdout
+
 struct ServeOptions: CommanderParsable {
     @Flag(names: [.short("v"), .long("verbose")], help: "Enable verbose logging")
     var verbose: Bool = false
@@ -462,7 +466,7 @@ extension CodexBarCLI {
                 let info = ServeStartPayload(port: Int(actualPort), authToken: authToken)
                 if let json = Self.encodeJSON(info, pretty: false) {
                     print(json)
-                    fflush(stdout)
+                    fflush(cliServeStandardOutput)
                 }
                 Self.writeStderr("CodexBar server listening on http://127.0.0.1:\(actualPort)\n")
             }
