@@ -64,8 +64,8 @@ public struct WindowsCookieBackend: CookieBackend {
 
     private func extractChromiumCookies(
         profile: WindowsBrowserDetection.BrowserProfile,
-        host: String
-    ) async -> String? {
+        host: String) async -> String?
+    {
         // Resolve AES-GCM key from Local State (DPAPI-protected).
         guard let aesKey = self.chromiumAESKey(localStatePath: profile.localStatePath) else {
             Self.log.debug("[\(profile.name)] Could not derive AES-GCM key from Local State")
@@ -278,8 +278,7 @@ private func aesGCMDecrypt(key: Data, nonce: Data, ciphertextWithTag: Data) -> S
                         key: keyBytes,
                         nonce: nonceBytes,
                         ciphertext: ctBytes,
-                        tag: tagBytes,
-                    )
+                        tag: tagBytes)
                 }
             }
         }
@@ -291,8 +290,8 @@ private func bcryptAESGCMDecrypt(
     key: UnsafeRawBufferPointer,
     nonce: UnsafeRawBufferPointer,
     ciphertext: UnsafeRawBufferPointer,
-    tag: UnsafeRawBufferPointer,
-) -> String? {
+    tag: UnsafeRawBufferPointer) -> String?
+{
     var hAlg: BCRYPT_ALG_HANDLE?
     guard BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_ALGORITHM, nil, 0) == 0, let hAlg else {
         return nil
@@ -312,8 +311,7 @@ private func bcryptAESGCMDecrypt(
             BCRYPT_CHAINING_MODE,
             UnsafeMutablePointer(mutating: buf.baseAddress!),
             ULONG(buf.count * MemoryLayout<WCHAR>.size),
-            0,
-        )
+            0)
     }) == 0 else { return nil }
 
     // Import the symmetric key.
@@ -330,8 +328,7 @@ private func bcryptAESGCMDecrypt(
             0,
             UnsafeMutablePointer(mutating: keyBuf.baseAddress!),
             ULONG(keyBuf.count),
-            0,
-        )
+            0)
     }
     guard keyResult == 0, let hKey else { return nil }
     defer { BCryptDestroyKey(hKey) }
@@ -367,8 +364,7 @@ private func bcryptAESGCMDecrypt(
                         ptBuf.baseAddress!,
                         ULONG(ptBuf.count),
                         &bytesWritten,
-                        0,
-                    )
+                        0)
                 }
             }
 
@@ -450,8 +446,7 @@ public enum WindowsBrowserDetection {
                     name: label,
                     engine: .chromium,
                     localStatePath: localStatePath,
-                    cookiesDBPath: resolvedCookies,
-                ))
+                    cookiesDBPath: resolvedCookies))
             }
         }
         return result
@@ -477,8 +472,7 @@ public enum WindowsBrowserDetection {
             name: "Opera",
             engine: .chromium,
             localStatePath: localStatePath,
-            cookiesDBPath: resolvedCookies,
-        )]
+            cookiesDBPath: resolvedCookies)]
     }
 
     private static func firefoxProfiles(under appData: String) -> [BrowserProfile] {
@@ -494,8 +488,7 @@ public enum WindowsBrowserDetection {
                 name: "Firefox",
                 engine: .gecko,
                 localStatePath: "",
-                cookiesDBPath: dbPath,
-            )
+                cookiesDBPath: dbPath)
         }
     }
 }

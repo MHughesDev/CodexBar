@@ -4,7 +4,7 @@ import Foundation
 /// macOS: Keychain. Windows: Credential Manager + DPAPI overflow. Linux: no-op.
 protocol SecretStore {
     func load<T: Codable>(key: KeychainCacheStore.Key, as type: T.Type) -> KeychainCacheStore.LoadResult<T>
-    func store<T: Codable>(key: KeychainCacheStore.Key, entry: T) -> Bool
+    func store(key: KeychainCacheStore.Key, entry: some Codable) -> Bool
     func clear(key: KeychainCacheStore.Key) -> KeychainCacheStore.ClearResult
     func keys(category: String) -> KeychainCacheStore.KeysResult
 }
@@ -13,7 +13,7 @@ protocol SecretStore {
 enum SecretStoreFactory {
     static func make() -> any SecretStore {
         #if os(macOS)
-        return macOSKeychainSecretStore()
+        return MacOSKeychainSecretStore()
         #elseif os(Windows)
         return WindowsCredentialSecretStore()
         #else
@@ -25,12 +25,12 @@ enum SecretStoreFactory {
 // MARK: - macOS backend
 
 #if os(macOS)
-struct macOSKeychainSecretStore: SecretStore {
+struct MacOSKeychainSecretStore: SecretStore {
     func load<T: Codable>(key: KeychainCacheStore.Key, as type: T.Type) -> KeychainCacheStore.LoadResult<T> {
         KeychainCacheStore.load(key: key, as: type)
     }
 
-    func store<T: Codable>(key: KeychainCacheStore.Key, entry: T) -> Bool {
+    func store(key: KeychainCacheStore.Key, entry: some Codable) -> Bool {
         KeychainCacheStore.storeResult(key: key, entry: entry)
     }
 
@@ -52,7 +52,7 @@ struct NoopSecretStore: SecretStore {
         .missing
     }
 
-    func store<T: Codable>(key: KeychainCacheStore.Key, entry: T) -> Bool {
+    func store(key: KeychainCacheStore.Key, entry: some Codable) -> Bool {
         false
     }
 
@@ -75,12 +75,12 @@ import WinSDK
 /// Uses CredWriteW/CredReadW/CredDeleteW/CredEnumerateW (CRED_TYPE_GENERIC).
 /// Blob size limit: 2,560 bytes per credential. Entries exceeding this are
 /// stored as DPAPI-encrypted files under %LOCALAPPDATA%\CodexBar\creds\.
-// TODO: verify exact WinSDK API names on Windows CI
+/// TODO: verify exact WinSDK API names on Windows CI
 struct WindowsCredentialSecretStore: SecretStore {
     private static let targetPrefix = "CodexBar:"
     private static let log = CodexBarLog.logger(LogCategories.keychainCache)
 
-    // Maximum payload size for Credential Manager (per-credential blob limit).
+    /// Maximum payload size for Credential Manager (per-credential blob limit).
     private static let maxCredentialBlobSize = 2048
 
     func load<T: Codable>(key: KeychainCacheStore.Key, as type: T.Type) -> KeychainCacheStore.LoadResult<T> {
@@ -111,7 +111,7 @@ struct WindowsCredentialSecretStore: SecretStore {
         return Self.decode(data, as: type, key: key)
     }
 
-    func store<T: Codable>(key: KeychainCacheStore.Key, entry: T) -> Bool {
+    func store(key: KeychainCacheStore.Key, entry: some Codable) -> Bool {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(entry) else { return false }
@@ -135,7 +135,8 @@ struct WindowsCredentialSecretStore: SecretStore {
                     cred.Comment = UnsafeMutablePointer(mutating: labelPtr)
                     let result = WinSDK.CredWriteW(&cred, 0)
                     if !result {
-                        Self.log.error("CredWriteW failed (\(key.category).\(key.identifier)): \(WinSDK.GetLastError())")
+                        Self.log.error(
+                            "CredWriteW failed (\(key.category).\(key.identifier)): \(WinSDK.GetLastError())")
                     }
                     return result
                 }
@@ -188,7 +189,7 @@ struct WindowsCredentialSecretStore: SecretStore {
     // MARK: - Helpers
 
     private static func targetName(for key: KeychainCacheStore.Key) -> String {
-        "\(targetPrefix)\(key.category).\(key.identifier)"
+        "\(self.targetPrefix)\(key.category).\(key.identifier)"
     }
 
     private static func decode<T: Codable>(
@@ -214,18 +215,18 @@ struct WindowsCredentialSecretStore: SecretStore {
     }
 
     private static func dpapiBlobURL(for key: KeychainCacheStore.Key) -> URL {
-        dpapiBlobDirectory.appendingPathComponent("\(key.category).\(key.identifier).bin")
+        self.dpapiBlobDirectory.appendingPathComponent("\(key.category).\(key.identifier).bin")
     }
 
     private static func loadFromDPAPIFile(key: KeychainCacheStore.Key) -> Data? {
-        let url = dpapiBlobURL(for: key)
+        let url = Self.dpapiBlobURL(for: key)
         guard let encrypted = try? Data(contentsOf: url) else { return nil }
-        return dpapiDecrypt(encrypted)
+        return Self.dpapiDecrypt(encrypted)
     }
 
     private static func storeToDPAPIFile(key: KeychainCacheStore.Key, data: Data) -> Bool {
-        guard let encrypted = dpapiEncrypt(data) else { return false }
-        let url = dpapiBlobURL(for: key)
+        guard let encrypted = self.dpapiEncrypt(data) else { return false }
+        let url = Self.dpapiBlobURL(for: key)
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
@@ -239,7 +240,7 @@ struct WindowsCredentialSecretStore: SecretStore {
     }
 
     private static func removeDPAPIFile(key: KeychainCacheStore.Key) -> Bool {
-        let url = dpapiBlobURL(for: key)
+        let url = Self.dpapiBlobURL(for: key)
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
         do {
             try FileManager.default.removeItem(at: url)

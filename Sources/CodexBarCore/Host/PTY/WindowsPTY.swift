@@ -2,12 +2,12 @@
 import Foundation
 import WinSDK
 
-// `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` is defined as a C preprocessor macro and may
-// not be exported by Swift's WinSDK overlay.  We define the numeric value directly:
-// ProcThreadAttributeValue(ProcThreadAttributePseudoConsole=22, Thread=0, Input=0, Additive=1)
-// = 22 | (0 << 16) | (0 << 17) | (1 << 19) = 22 | 0x00080000 = 0x00080016
-// (Windows SDK headers actually ship this as 0x00020016 — use that well-known value.)
-private let kProcThreadAttributePseudoConsole: SIZE_T = 0x00020016
+/// `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` is defined as a C preprocessor macro and may
+/// not be exported by Swift's WinSDK overlay.  We define the numeric value directly:
+/// ProcThreadAttributeValue(ProcThreadAttributePseudoConsole=22, Thread=0, Input=0, Additive=1)
+/// = 22 | (0 << 16) | (0 << 17) | (1 << 19) = 22 | 0x00080000 = 0x00080016
+/// (Windows SDK headers actually ship this as 0x00020016 — use that well-known value.)
+private let kProcThreadAttributePseudoConsole: SIZE_T = 0x0002_0016
 
 /// Windows pseudo-console (ConPTY) wrapper.
 ///
@@ -35,7 +35,7 @@ final class WindowsPTY: @unchecked Sendable {
     // `HPCON` is `PVOID` (`UnsafeMutableRawPointer?`) in Swift WinSDK.
     // We store it as `HPCON` (which is already Optional) and use nil to mean "not created".
     private var hPC: HPCON = nil
-    private var inputReadHandle: HANDLE = INVALID_HANDLE_VALUE   // child side of input
+    private var inputReadHandle: HANDLE = INVALID_HANDLE_VALUE // child side of input
     private var outputWriteHandle: HANDLE = INVALID_HANDLE_VALUE // child side of output
     private var processHandle: HANDLE = INVALID_HANDLE_VALUE
     private var threadHandle: HANDLE = INVALID_HANDLE_VALUE
@@ -59,15 +59,15 @@ final class WindowsPTY: @unchecked Sendable {
         var errorDescription: String? {
             switch self {
             case let .createPipeFailed(which, code):
-                return "CreatePipe(\(which)) failed with error \(code)"
+                "CreatePipe(\(which)) failed with error \(code)"
             case let .createPseudoConsoleFailed(code):
-                return "CreatePseudoConsole failed with error \(code)"
+                "CreatePseudoConsole failed with error \(code)"
             case let .attributeListFailed(code):
-                return "InitializeProcThreadAttributeList failed with error \(code)"
+                "InitializeProcThreadAttributeList failed with error \(code)"
             case let .createProcessFailed(code):
-                return "CreateProcessW failed with error \(code)"
+                "CreateProcessW failed with error \(code)"
             case .alreadySpawned:
-                return "WindowsPTY: spawn() called more than once"
+                "WindowsPTY: spawn() called more than once"
             }
         }
     }
@@ -220,27 +220,59 @@ final class WindowsPTY: @unchecked Sendable {
 
         let launched: Bool = withUnsafeMutablePointer(to: &siEx.StartupInfo) { startupPtr in
             if let envBlock {
-                return envBlock.withUnsafeBytes { envBytes in
+                envBlock.withUnsafeBytes { envBytes in
                     let envPtr = envBytes.baseAddress.map { UnsafeMutableRawPointer(mutating: $0) }
                     if var wdBuf = workDirW {
-                        return CreateProcessW(
-                            nil, &cmdLineW, nil, nil, false,
-                            creationFlags, envPtr, &wdBuf, startupPtr, &pi)
+                        CreateProcessW(
+                            nil,
+                            &cmdLineW,
+                            nil,
+                            nil,
+                            false,
+                            creationFlags,
+                            envPtr,
+                            &wdBuf,
+                            startupPtr,
+                            &pi)
                     } else {
-                        return CreateProcessW(
-                            nil, &cmdLineW, nil, nil, false,
-                            creationFlags, envPtr, nil, startupPtr, &pi)
+                        CreateProcessW(
+                            nil,
+                            &cmdLineW,
+                            nil,
+                            nil,
+                            false,
+                            creationFlags,
+                            envPtr,
+                            nil,
+                            startupPtr,
+                            &pi)
                     }
                 }
             } else {
                 if var wdBuf = workDirW {
-                    return CreateProcessW(
-                        nil, &cmdLineW, nil, nil, false,
-                        creationFlags, nil, &wdBuf, startupPtr, &pi)
+                    CreateProcessW(
+                        nil,
+                        &cmdLineW,
+                        nil,
+                        nil,
+                        false,
+                        creationFlags,
+                        nil,
+                        &wdBuf,
+                        startupPtr,
+                        &pi)
                 } else {
-                    return CreateProcessW(
-                        nil, &cmdLineW, nil, nil, false,
-                        creationFlags, nil, nil, startupPtr, &pi)
+                    CreateProcessW(
+                        nil,
+                        &cmdLineW,
+                        nil,
+                        nil,
+                        false,
+                        creationFlags,
+                        nil,
+                        nil,
+                        startupPtr,
+                        &pi)
                 }
             }
         }
@@ -346,16 +378,16 @@ final class WindowsPTY: @unchecked Sendable {
 
     /// Builds a Windows command-line string quoting each argument.
     private static func buildCommandLine(executable: String, arguments: [String]) -> String {
-        var parts = [quoteArgument(executable)]
+        var parts = [Self.quoteArgument(executable)]
         for arg in arguments {
-            parts.append(quoteArgument(arg))
+            parts.append(Self.quoteArgument(arg))
         }
         return parts.joined(separator: " ")
     }
 
     /// Minimal quoting: wraps the argument in double quotes and escapes internal quotes.
     private static func quoteArgument(_ arg: String) -> String {
-        if !arg.contains(" ") && !arg.contains("\"") && !arg.contains("\t") {
+        if !arg.contains(" "), !arg.contains("\""), !arg.contains("\t") {
             return arg
         }
         var out = "\""

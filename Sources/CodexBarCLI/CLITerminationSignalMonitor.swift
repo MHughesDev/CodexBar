@@ -60,7 +60,7 @@ final class CLITerminationSignalMonitor: @unchecked Sendable {
     static func terminateActiveHelpersAndReraise(_ signalNumber: Int32) {
         TTYCommandRunner.terminateActiveProcessesForAppShutdown()
         #if canImport(Darwin) || os(Linux)
-        Self.restoreDefaultHandler(for: signalNumber)
+        self.restoreDefaultHandler(for: signalNumber)
         _ = kill(getpid(), signalNumber)
         #endif
     }

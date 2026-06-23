@@ -174,7 +174,8 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
         resetAfterFetch: Bool) async throws -> ProviderFetchResult
     {
         #if !canImport(Darwin) && !os(Linux)
-        throw AntigravityCLISession.SessionError.launchFailed("Antigravity PTY session is not supported on this platform")
+        throw AntigravityCLISession.SessionError.launchFailed(
+            "Antigravity PTY session is not supported on this platform")
         #else
         let session = AntigravityCLISession.shared
         let pid = try await session.beginProbe(binary: binary, idleWindow: idleWindow)
