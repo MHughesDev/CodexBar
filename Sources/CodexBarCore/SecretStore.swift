@@ -189,7 +189,7 @@ struct WindowsCredentialSecretStore: SecretStore {
     // MARK: - Helpers
 
     private static func targetName(for key: KeychainCacheStore.Key) -> String {
-        "\(Self.targetPrefix)\(key.category).\(key.identifier)"
+        "\(self.targetPrefix)\(key.category).\(key.identifier)"
     }
 
     private static func decode<T: Codable>(
@@ -215,7 +215,7 @@ struct WindowsCredentialSecretStore: SecretStore {
     }
 
     private static func dpapiBlobURL(for key: KeychainCacheStore.Key) -> URL {
-        Self.dpapiBlobDirectory.appendingPathComponent("\(key.category).\(key.identifier).bin")
+        self.dpapiBlobDirectory.appendingPathComponent("\(key.category).\(key.identifier).bin")
     }
 
     private static func loadFromDPAPIFile(key: KeychainCacheStore.Key) -> Data? {
@@ -225,7 +225,7 @@ struct WindowsCredentialSecretStore: SecretStore {
     }
 
     private static func storeToDPAPIFile(key: KeychainCacheStore.Key, data: Data) -> Bool {
-        guard let encrypted = Self.dpapiEncrypt(data) else { return false }
+        guard let encrypted = self.dpapiEncrypt(data) else { return false }
         let url = Self.dpapiBlobURL(for: key)
         do {
             try FileManager.default.createDirectory(
