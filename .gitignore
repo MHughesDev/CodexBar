@@ -45,3 +45,7 @@ docs/.astro/
 # Swift Package Manager metadata (leave sources tracked)
 # Packages/
 # Package.resolved
+
+# .NET build output
+[Bb]in/
+[Oo]bj/

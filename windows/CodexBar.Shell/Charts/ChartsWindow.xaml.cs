@@ -21,10 +21,10 @@ public sealed partial class ChartsWindow : Window
         var costs = await _engine.GetCostAsync();
         foreach (var cost in costs)
         {
-            var points = (cost.DailyEntries ?? [])
+            var points = cost.Daily
                 .Select(e => new DailyUsagePoint(
                     DateOnly.Parse(e.Date),
-                    (double)(e.TotalCost ?? e.InputTokens + e.OutputTokens)))
+                    e.CostUsd ?? 0))
                 .ToList();
 
             ChartsPanel.Children.Add(new UsageHistoryChart

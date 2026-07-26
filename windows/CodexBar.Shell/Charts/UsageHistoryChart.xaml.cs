@@ -1,5 +1,3 @@
-using LiveChartsCore;
-using LiveChartsCore.SkiaSharpView;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -34,13 +32,6 @@ public sealed partial class UsageHistoryChart : UserControl
     private void Refresh()
     {
         ChartTitle.Text = $"Usage — {ProviderName}";
-
-        var points = DataPoints?.ToList() ?? [];
-        var values = points.Select(p => p.Value).ToArray();
-        var labels = points.Select(p => p.Date.ToString("MMM d")).ToArray();
-
-        Chart.Series = [new ColumnSeries<double> { Values = values, Name = ProviderName }];
-        Chart.XAxes = [new Axis { Labels = labels, LabelsRotation = 45 }];
-        Chart.YAxes = [new Axis { MinLimit = 0 }];
+        // Chart rendering is a placeholder until LiveCharts startup crash is resolved.
     }
 }

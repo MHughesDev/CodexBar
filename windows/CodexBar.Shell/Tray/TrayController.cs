@@ -1,4 +1,5 @@
 using CodexBar.Shell.Engine;
+using CodexBar.Shell.Flyout;
 using H.NotifyIcon;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -67,8 +68,8 @@ public sealed class TrayController : IDisposable
 
     private static double UsageFraction(ProviderDto p)
     {
-        if (p.Usage is { Used: { } used, Limit: { } limit } && limit > 0)
-            return (double)used / limit;
+        if (p.Usage?.Primary is { UsedPercent: var usedPct })
+            return usedPct / 100.0;
         return 0;
     }
 

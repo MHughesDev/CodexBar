@@ -21,54 +21,77 @@ public partial class App : Application
 
     public App()
     {
+        Log("App() constructor start");
         InitializeComponent();
+        Log("App() InitializeComponent done");
         UnhandledException += App_UnhandledException;
+        Log("App() constructor done");
+    }
+
+    private static readonly string _logFile = Path.Combine(Path.GetTempPath(), "codexbar_startup.log");
+
+    private static void Log(string msg)
+    {
+        try { File.AppendAllText(_logFile, $"{DateTime.Now:HH:mm:ss.fff} {msg}\n"); } catch { }
     }
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        Log("OnLaunched start");
+
         // Single-instance guard: if another instance holds the mutex, quit silently.
         _mutex = new Mutex(initiallyOwned: true, MutexName, out bool isNew);
+        Log($"Mutex acquired, isNew={isNew}");
         if (!isNew)
         {
             Exit();
             return;
         }
 
+        Log("Before ToastHelper.Register");
         ToastHelper.Register();
         ToastHelper.NotificationActivated += OnNotificationActivated;
+        Log("After ToastHelper.Register");
 
         var enginePath = ResolveEnginePath();
+        Log($"Engine path: {enginePath}");
 
         _sidecar = new SidecarManager(enginePath);
         try
         {
+            Log("Before StartAsync");
             await _sidecar.StartAsync();
+            Log($"Engine started on port {_sidecar.Port}");
         }
         catch (Exception ex)
         {
-            // Cannot start engine — surface an error toast and exit.
+            Log($"Engine failed: {ex.Message}");
             ToastHelper.ShowQuotaWarning("Engine", 0);
-            _ = ex;
             Exit();
             return;
         }
 
+        Log("Before EngineClient");
         _engineClient = new EngineClient(_sidecar.Port, _sidecar.AuthToken);
 
+        Log("Before FlyoutWindow");
         _flyout = new FlyoutWindow();
         _flyout.BindEngineClient(_engineClient);
+        Log("After FlyoutWindow");
 
         var cliRunner = new CliRunner(enginePath);
 
+        Log("Before TrayController");
         _trayController = new TrayController(_flyout);
         _trayController.SettingsRequested += OnSettingsRequested;
         _trayController.QuitRequested += OnQuitRequested;
+        Log("After TrayController");
 
         _engineClient.UsageUpdated += OnUsageUpdated;
 
         _pollCts = new CancellationTokenSource();
         _ = _engineClient.StartPollingAsync(TimeSpan.FromMinutes(2), _pollCts.Token);
+        Log("OnLaunched complete");
     }
 
     private void OnUsageUpdated(object? sender, UsageUpdatedEventArgs e)

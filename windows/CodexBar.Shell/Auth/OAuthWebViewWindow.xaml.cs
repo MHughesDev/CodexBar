@@ -24,7 +24,7 @@ public sealed partial class OAuthWebViewWindow : Window
         };
     }
 
-    private void WebView_NavigationStarting(Microsoft.Web.WebView2.WinUI.WebView2 sender, CoreWebView2NavigationStartingEventArgs args)
+    private void WebView_NavigationStarting(Microsoft.UI.Xaml.Controls.WebView2 sender, CoreWebView2NavigationStartingEventArgs args)
     {
         if (args.Uri.StartsWith(_redirectUriPrefix, StringComparison.OrdinalIgnoreCase))
         {
